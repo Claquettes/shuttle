@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+*.dump
+*.sql
+*.gz
+.DS_Store
+*.apobak
+

@@ -1,0 +1,48 @@
+{
+  "name": "shuttle",
+  "version": "1.0.0",
+  "description": "PostgreSQL backup tool with SSH transfer",
+  "type": "module",
+  "bin": {
+    "shuttle": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "postgresql",
+    "backup",
+    "pg_dump",
+    "ssh",
+    "sftp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "ssh2-sftp-client": "^10.0.3",
+    "zod": "^3.23.8",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/node-cron": "^3.0.11",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.2",
+    "tsx": "^4.16.1",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
