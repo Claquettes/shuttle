@@ -8,7 +8,7 @@ export function daemonCommand(): Command {
 
   cmd
     .description("Run Shuttle as a daemon with scheduled jobs")
-    .option("-c, --config <path>", "Path to .apo config file", "shuttle.apo")
+    .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
     .action(async (options) => {
       const globalOpts = cmd.parent?.opts() || {};
       initLogger({
@@ -32,12 +32,12 @@ export function daemonCommand(): Command {
         logger.info(`Loading configuration from: ${options.config}`);
         const resolvedConfig = loadConfig(options.config);
 
-        // Valider les variables d'environnement
-        const { validateEnvVars } = await import("../../config/loader.js");
-        const envValidation = validateEnvVars(resolvedConfig);
-        if (!envValidation.valid) {
-          logger.error("Missing required environment variables:");
-          for (const error of envValidation.errors) {
+        // Valider la configuration
+        const { validateConfig } = await import("../../config/loader.js");
+        const validation = validateConfig(resolvedConfig);
+        if (!validation.valid) {
+          logger.error("Configuration validation failed:");
+          for (const error of validation.errors) {
             logger.error(`  - ${error}`);
           }
           process.exit(1);

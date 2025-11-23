@@ -18,7 +18,7 @@ export function resolvePath(relativePath: string): string {
 }
 
 /**
- * Trouve le répertoire contenant le fichier .apo
+ * Trouve le répertoire contenant le fichier de configuration
  */
 export function findConfigDir(configPath: string): string {
   const resolved = resolvePath(configPath);

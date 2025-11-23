@@ -8,7 +8,7 @@ export function runCommand(): Command {
 
   cmd
     .description("Run all jobs once immediately")
-    .option("-c, --config <path>", "Path to .apo config file", "shuttle.apo")
+    .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
     .action(async (options) => {
       const globalOpts = cmd.parent?.opts() || {};
       initLogger({
@@ -20,12 +20,12 @@ export function runCommand(): Command {
         logger.info(`Loading configuration from: ${options.config}`);
         const resolvedConfig = loadConfig(options.config);
 
-        // Valider les variables d'environnement
-        const { validateEnvVars } = await import("../../config/loader.js");
-        const envValidation = validateEnvVars(resolvedConfig);
-        if (!envValidation.valid) {
-          logger.error("Missing required environment variables:");
-          for (const error of envValidation.errors) {
+        // Valider la configuration
+        const { validateConfig } = await import("../../config/loader.js");
+        const validation = validateConfig(resolvedConfig);
+        if (!validation.valid) {
+          logger.error("Configuration validation failed:");
+          for (const error of validation.errors) {
             logger.error(`  - ${error}`);
           }
           process.exit(1);
@@ -40,14 +40,14 @@ export function runCommand(): Command {
         logger.info("=== Execution Summary ===");
         for (const result of results) {
           if (result.success) {
-            logger.info(`✓ ${result.jobName}: Success`);
+            logger.info(`${result.jobName}: Success`);
             if (result.retention) {
               logger.info(
                 `  Retention: ${result.retention.localDeleted} local, ${result.retention.remoteDeleted} remote files deleted`
               );
             }
           } else {
-            logger.error(`✗ ${result.jobName}: Failed - ${result.error}`);
+            logger.error(`${result.jobName}: Failed - ${result.error}`);
           }
         }
 

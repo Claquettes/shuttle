@@ -1,14 +1,12 @@
-import type { ShuttleConfig, Job, Connections } from "./schema.js";
+import type { ShuttleConfig, Job, SourceConfig, TargetConfig } from "./schema.js";
+import type { DatabaseConfig } from "../utils/env.js";
+import type { SSHConfig } from "../utils/env.js";
 
-export type { ShuttleConfig, Job, Connections };
+export type { ShuttleConfig, Job, SourceConfig, TargetConfig };
 
 export interface ResolvedConfig {
   config: ShuttleConfig;
-  sourceDbConfig: {
-    connectionId: string;
-  };
-  targetSshConfig: {
-    connectionId: string;
-  };
+  sourceDbConfig: DatabaseConfig;
+  targetSshConfig: SSHConfig;
 }
 

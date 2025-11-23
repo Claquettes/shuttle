@@ -1,17 +1,17 @@
-# Shuttle 🚀
+# Shuttle
 
 **Shuttle** est un outil de backup PostgreSQL qui permet d'exporter vos bases de données et de les transférer automatiquement vers un serveur distant via SSH.
 
 ## Caractéristiques
 
-- ✅ **Configuration sans secrets** : Le fichier `.apo` ne contient aucune information sensible
-- ✅ **Séparation stricte** : Tous les secrets sont dans `.env` ou les variables d'environnement
-- ✅ **Support Docker** : Fonctionne parfaitement avec des bases de données dockerisées
-- ✅ **Planification flexible** : Utilise des expressions cron pour planifier les backups
-- ✅ **Rétention automatique** : Gère automatiquement la rétention des backups (local + distant)
-- ✅ **Types de dumps** : Support des dumps complets ou par tables spécifiques
-- ✅ **Compression** : Compression optionnelle des dumps
-- ✅ **CLI complète** : Commandes pour init, validate, run, daemon, ls
+- **Configuration sans secrets** : Le fichier `.yml` ne contient aucune information sensible
+- **Séparation stricte** : Tous les secrets sont dans `.env` ou les variables d'environnement
+- **Support Docker** : Fonctionne parfaitement avec des bases de données dockerisées
+- **Planification flexible** : Utilise des expressions cron pour planifier les backups
+- **Rétention automatique** : Gère automatiquement la rétention des backups (local + distant)
+- **Types de dumps** : Support des dumps complets ou par tables spécifiques
+- **Compression** : Compression optionnelle des dumps
+- **CLI complète** : Commandes pour init, validate, run, daemon, ls
 
 ## Installation
 
@@ -38,7 +38,7 @@ shuttle init
 ```
 
 Cela crée deux fichiers :
-- `shuttle.apo` : Configuration fonctionnelle (sans secrets)
+- `shuttle.yml` : Configuration fonctionnelle (sans secrets)
 - `.env.example` : Template pour les variables d'environnement
 
 ### 2. Configurer les secrets
@@ -49,9 +49,9 @@ Copiez `.env.example` vers `.env` et remplissez les valeurs :
 cp .env.example .env
 ```
 
-### 3. Structure du fichier `.apo`
+### 3. Structure du fichier `.yml`
 
-Le fichier `.apo` (ou `.json`) décrit la configuration fonctionnelle :
+Le fichier `.yml` (ou `.yaml`, `.json`, `.apo`) décrit la configuration fonctionnelle :
 
 ```json
 {
@@ -133,17 +133,17 @@ SHUTTLE_LOCAL_BACKUP_DIR=./backups  # Répertoire local pour les dumps
 ### Valider la configuration
 
 ```bash
-shuttle validate -c shuttle.apo
+shuttle validate -c shuttle.yml
 ```
 
 Vérifie que :
-- Le fichier `.apo` est valide
+- Le fichier de configuration est valide
 - Toutes les variables d'environnement requises sont présentes
 
 ### Exécuter les jobs une fois
 
 ```bash
-shuttle run -c shuttle.apo
+shuttle run -c shuttle.yml
 ```
 
 Exécute tous les jobs immédiatement, sans attendre le cron.
@@ -151,7 +151,7 @@ Exécute tous les jobs immédiatement, sans attendre le cron.
 ### Lancer en mode daemon
 
 ```bash
-shuttle daemon -c shuttle.apo
+shuttle daemon -c shuttle.yml
 ```
 
 Démarre le daemon qui planifie les jobs selon leurs expressions cron. Le processus reste actif jusqu'à interruption (Ctrl+C).
@@ -159,7 +159,7 @@ Démarre le daemon qui planifie les jobs selon leurs expressions cron. Le proces
 ### Lister les jobs
 
 ```bash
-shuttle ls -c shuttle.apo
+shuttle ls -c shuttle.yml
 ```
 
 Affiche la liste de tous les jobs configurés.
@@ -190,7 +190,7 @@ docker run -d \
 #### 3. Préparer la configuration
 
 Créez un répertoire `config/` avec :
-- `shuttle.apo` (sans secrets)
+- `shuttle.yml` (sans secrets)
 - `.env` (avec tous les secrets)
 
 Dans `.env`, utilisez le nom du service Docker comme host :
@@ -210,7 +210,7 @@ docker run -d \
   -v $(pwd)/backups:/backups \
   --env-file ./config/.env \
   shuttle \
-  shuttle daemon -c /config/shuttle.apo
+  shuttle daemon -c /config/shuttle.yml
 ```
 
 **Explication :**
@@ -240,7 +240,7 @@ services:
       - ./backups:/backups
     env_file:
       - ./config/.env
-    command: shuttle daemon -c /config/shuttle.apo
+    command: shuttle daemon -c /config/shuttle.yml
     depends_on:
       - postgres
     networks:
@@ -280,7 +280,7 @@ Les backups sont organisés comme suit :
 ### Bonnes pratiques
 
 1. **Ne jamais commiter `.env`** : Ajoutez `.env` à `.gitignore`
-2. **Versionner `.apo`** : Le fichier `.apo` ne contient pas de secrets, il peut être versionné
+2. **Versionner `.yml`** : Le fichier `.yml` ne contient pas de secrets, il peut être versionné
 3. **Permissions SSH** : Utilisez des clés SSH avec des permissions restrictives (`chmod 600`)
 4. **Variables d'environnement en production** : En Docker, utilisez `--env-file` ou des secrets Docker
 
@@ -335,8 +335,8 @@ shuttle/
 │   │   ├── commander.ts      # Définition des commandes
 │   │   └── commands/         # Implémentation des commandes
 │   ├── config/
-│   │   ├── schema.ts         # Schéma Zod pour .apo
-│   │   ├── loader.ts         # Chargement .apo + .env
+│   │   ├── schema.ts         # Schéma Zod pour la config
+│   │   ├── loader.ts         # Chargement .yml + .env
 │   │   └── types.ts          # Types TypeScript
 │   ├── core/
 │   │   ├── jobs.ts           # Exécution des jobs

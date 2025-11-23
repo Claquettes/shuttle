@@ -1,5 +1,4 @@
 import { join } from "path";
-import { getDatabaseConfig, getSSHConfig } from "../utils/env.js";
 import { runPgDump } from "../services/pgDump.js";
 import { transferFile } from "../services/sshTransfer.js";
 import { applyRetention } from "../services/retention.js";
@@ -30,9 +29,9 @@ export async function executeJob(
   logger.info(`[${job.name}] Starting job execution...`);
 
   try {
-    // 1. Récupérer les configurations
-    const dbConfig = getDatabaseConfig(resolvedConfig.sourceDbConfig.connectionId);
-    const sshConfig = getSSHConfig(resolvedConfig.targetSshConfig.connectionId);
+    // 1. Utiliser les configurations déjà parsées
+    const dbConfig = resolvedConfig.sourceDbConfig;
+    const sshConfig = resolvedConfig.targetSshConfig;
 
     // 2. Exécuter pg_dump
     const dumpResult = await runPgDump({

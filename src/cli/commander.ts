@@ -13,7 +13,7 @@ program
   .version("1.0.0");
 
 program
-  .option("-c, --config <path>", "Path to .apo config file", "shuttle.apo")
+  .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
   .option("-v, --verbose", "Verbose output")
   .option("-q, --quiet", "Quiet output (errors only)");
 

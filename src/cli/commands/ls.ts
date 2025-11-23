@@ -7,7 +7,7 @@ export function lsCommand(): Command {
 
   cmd
     .description("List all configured jobs")
-    .option("-c, --config <path>", "Path to .apo config file", "shuttle.apo")
+    .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
     .action((options) => {
       const globalOpts = cmd.parent?.opts() || {};
       initLogger({
@@ -19,8 +19,8 @@ export function lsCommand(): Command {
         const resolvedConfig = loadConfig(options.config);
 
         logger.info(`Configuration: ${resolvedConfig.config.shuttle.name}`);
-        logger.info(`Source: ${resolvedConfig.sourceDbConfig.connectionId}`);
-        logger.info(`Target: ${resolvedConfig.targetSshConfig.connectionId}`);
+        logger.info(`Source: ${resolvedConfig.sourceDbConfig.host}:${resolvedConfig.sourceDbConfig.port}/${resolvedConfig.sourceDbConfig.database}`);
+        logger.info(`Target: ${resolvedConfig.targetSshConfig.user}@${resolvedConfig.targetSshConfig.host}:${resolvedConfig.targetSshConfig.port}`);
         logger.info("");
 
         if (resolvedConfig.config.shuttle.jobs.length === 0) {
