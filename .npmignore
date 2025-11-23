@@ -1,0 +1,45 @@
+# Source files (not needed in npm package)
+src/
+tsconfig.json
+.eslintrc.json
+.prettierrc
+
+# Build artifacts (will be included via dist/)
+*.tsbuildinfo
+
+# Development files
+.git/
+.gitignore
+.env
+.env.*
+*.log
+*.dump
+*.sql
+*.gz
+
+# Examples (optional - you might want to include these)
+examples/
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test files (if you add tests later)
+test/
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Documentation (optional - README.md will be included)
+SIMPLIFICATION.md
+INTEGRATION_GUIDE.md
+

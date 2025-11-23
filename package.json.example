@@ -1,11 +1,11 @@
 {
-  "name": "@claquettes/shuttle",
+  "name": "@yourusername/shuttle",
   "version": "1.0.0",
   "description": "PostgreSQL backup tool with SSH transfer",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "shuttle": "dist/index.js"
+    "shuttle": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -33,15 +33,11 @@
     "cron",
     "scheduled-backup"
   ],
-  "author": "",
+  "author": "Your Name",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/claquettes/shuttle.git"
-  },
-  "homepage": "https://github.com/claquettes/shuttle#readme",
-  "bugs": {
-    "url": "https://github.com/claquettes/shuttle/issues"
+    "url": "git+https://github.com/yourusername/shuttle.git"
   },
   "dependencies": {
     "commander": "^11.1.0",
@@ -68,3 +64,4 @@
     "node": ">=18.0.0"
   }
 }
+

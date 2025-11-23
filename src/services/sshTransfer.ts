@@ -103,7 +103,7 @@ export async function listRemoteFiles(remoteDir: string, sshConfig: SSHConfig): 
 
     try {
       const files = await client.list(remoteDir);
-      return files.map((f) => f.name).filter((name) => !name.startsWith("."));
+      return files.map((f: { name: string }) => f.name).filter((name: string) => !name.startsWith("."));
     } catch (err) {
       // Le répertoire n'existe peut-être pas encore
       if (err instanceof Error && err.message.includes("No such file")) {

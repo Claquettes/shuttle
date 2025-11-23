@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { writeFileSync, unlinkSync, existsSync } from "fs";
+import { writeFileSync, unlinkSync, existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import type { DatabaseConfig } from "../utils/env.js";
 import type { Job } from "../config/schema.js";
@@ -120,7 +120,6 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
 
       if (job.compress) {
         try {
-          const { readFileSync, statSync } = await import("fs");
           const content = readFileSync(outputPath);
           const compressed = gzipSync(content);
           const compressedPath = `${outputPath}.gz`;
@@ -131,11 +130,9 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
           logger.debug(`[${job.name}] Compressed dump: ${finalSize} bytes`);
         } catch (err) {
           logger.warn(`[${job.name}] Compression failed, keeping uncompressed: ${err}`);
-          const { statSync } = await import("fs");
           finalSize = statSync(outputPath).size;
         }
       } else {
-        const { statSync } = await import("fs");
         finalSize = statSync(outputPath).size;
       }
 

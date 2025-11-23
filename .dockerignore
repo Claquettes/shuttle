@@ -1,15 +1,19 @@
 node_modules
-dist
 .git
+.gitignore
 .env
+.env.*
 *.log
 *.dump
 *.sql
 *.gz
 .DS_Store
-examples
-README.md
-.eslintrc.json
-.prettierrc
-tsconfig.json
-
+.vscode
+.idea
+*.swp
+*.swo
+dist
+# Keep examples for documentation but exclude large files
+examples/*.dump
+examples/*.sql
+examples/*.gz

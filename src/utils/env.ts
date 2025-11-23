@@ -110,7 +110,6 @@ export function validateSSHEnv(connectionId: string): {
 } {
   const prefix = `SHUTTLE_${connectionId.toUpperCase().replace(/-/g, "_")}_SSH_`;
   const required = ["HOST", "USER", "KEY_PATH", "BASE_PATH"];
-  const optional = ["PORT", "KEY_PASSPHRASE"];
   const missing: string[] = [];
 
   for (const key of required) {

@@ -36,9 +36,33 @@ export function getLogger(): pino.Logger {
 }
 
 export const logger = {
-  info: (msg: string, ...args: unknown[]) => getLogger().info(msg, ...args),
-  warn: (msg: string, ...args: unknown[]) => getLogger().warn(msg, ...args),
-  error: (msg: string, ...args: unknown[]) => getLogger().error(msg, ...args),
-  debug: (msg: string, ...args: unknown[]) => getLogger().debug(msg, ...args),
+  info: (msg: string, ...args: unknown[]) => {
+    if (args.length > 0) {
+      getLogger().info({ args }, msg);
+    } else {
+      getLogger().info(msg);
+    }
+  },
+  warn: (msg: string, ...args: unknown[]) => {
+    if (args.length > 0) {
+      getLogger().warn({ args }, msg);
+    } else {
+      getLogger().warn(msg);
+    }
+  },
+  error: (msg: string, ...args: unknown[]) => {
+    if (args.length > 0) {
+      getLogger().error({ args }, msg);
+    } else {
+      getLogger().error(msg);
+    }
+  },
+  debug: (msg: string, ...args: unknown[]) => {
+    if (args.length > 0) {
+      getLogger().debug({ args }, msg);
+    } else {
+      getLogger().debug(msg);
+    }
+  },
 };
 

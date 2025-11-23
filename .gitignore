@@ -1,10 +1,110 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
 dist/
-*.log
+build/
+*.tsbuildinfo
+
+# Environment variables
 .env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Backup files
 *.dump
 *.sql
 *.gz
-.DS_Store
 *.apobak
+backups/
+*.backup
+*.bak
+
+# SSH keys and certificates
+ssh_key
+ssh_key.*
+*.pem
+*.key
+*.crt
+*.cert
+id_rsa
+id_rsa.pub
+*.ppk
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Local configuration files
+shuttle.yml.local
+shuttle.*.local.yml
+*.local.yml
+*.local.yaml
+*.local.json
+
+# Package manager locks (keep only package-lock.json for npm)
+yarn.lock
+pnpm-lock.yaml
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
 

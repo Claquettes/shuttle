@@ -1,13 +1,9 @@
-import { dirname, join, resolve } from "path";
-import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 /**
  * Gestion des chemins, notamment pour Docker
  */
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Résout un chemin relatif depuis le répertoire de travail courant

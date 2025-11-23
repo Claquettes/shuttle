@@ -1,261 +1,328 @@
 # Shuttle
 
-**Shuttle** est un outil de backup PostgreSQL qui permet d'exporter vos bases de données et de les transférer automatiquement vers un serveur distant via SSH.
+**Shuttle** is a PostgreSQL backup tool that exports your databases and automatically transfers them to a remote server via SSH.
 
-## Caractéristiques
+- **npm package**: [`@claquettes/shuttle`](https://www.npmjs.com/package/@claquettes/shuttle)
+- **Docker image**: [`claquettes/shuttle`](https://hub.docker.com/r/claquettes/shuttle)
+- **GitHub**: [claquettes/shuttle](https://github.com/claquettes/shuttle)
 
-- **Configuration sans secrets** : Le fichier `.yml` ne contient aucune information sensible
-- **Séparation stricte** : Tous les secrets sont dans `.env` ou les variables d'environnement
-- **Support Docker** : Fonctionne parfaitement avec des bases de données dockerisées
-- **Planification flexible** : Utilise des expressions cron pour planifier les backups
-- **Rétention automatique** : Gère automatiquement la rétention des backups (local + distant)
-- **Types de dumps** : Support des dumps complets ou par tables spécifiques
-- **Compression** : Compression optionnelle des dumps
-- **CLI complète** : Commandes pour init, validate, run, daemon, ls
+## Features
+
+- **Simple configuration**: Single YAML file with PostgreSQL URL support
+- **Flexible**: Secrets can be in the YAML file or via environment variables (${VAR})
+- **Docker support**: Works seamlessly with containerized databases
+- **Flexible scheduling**: Uses cron expressions to schedule backups
+- **Automatic retention**: Manages backup retention automatically (local + remote)
+- **Dump types**: Supports full dumps or specific tables
+- **Compression**: Optional dump compression
+- **Complete CLI**: Commands for init, validate, run, daemon, ls
 
 ## Installation
 
-### Via npm/pnpm (global)
+### Option 1: npm/pnpm (CLI - Recommended for local use)
+
+Install globally to use Shuttle as a CLI tool:
 
 ```bash
-npm install -g shuttle
-# ou
-pnpm add -g shuttle
+npm install -g @claquettes/shuttle
+# or
+pnpm add -g @claquettes/shuttle
 ```
 
-### Via Docker
+After installation, use Shuttle commands directly:
+```bash
+shuttle init
+shuttle validate -c shuttle.yml
+shuttle run -c shuttle.yml
+```
+
+### Option 2: Docker (Recommended for production)
+
+#### Using pre-built image from Docker Hub
 
 ```bash
-docker build -t shuttle .
+# Pull the latest image
+docker pull claquettes/shuttle:latest
+
+# Or a specific version
+docker pull claquettes/shuttle:1.0.0
 ```
+
+#### Using in docker-compose
+
+```yaml
+services:
+  shuttle:
+    # Use pre-built image (recommended)
+    image: claquettes/shuttle:latest
+    
+    # Or use GitHub Container Registry
+    # image: ghcr.io/claquettes/shuttle:latest
+    
+    volumes:
+      - ./shuttle.yml:/config/shuttle.yml:ro
+      - ./ssh_key:/config/ssh_key:ro
+      - ./backups:/backups
+    command: shuttle daemon -c /config/shuttle.yml
+```
+
+#### Building from source (optional)
+
+If you prefer to build from source:
+
+```bash
+docker build -f Dockerfile.production -t shuttle:latest .
+```
+
+Or in docker-compose (build from source):
+
+```yaml
+services:
+  shuttle:
+    build:
+      context: https://github.com/claquettes/shuttle.git
+      dockerfile: Dockerfile.production
+```
+
+**Note:** For production, we recommend using the pre-built image `claquettes/shuttle:latest` from Docker Hub instead of building from source.
 
 ## Configuration
 
-### 1. Initialiser la configuration
+### 1. Initialize configuration
 
 ```bash
 shuttle init
 ```
 
-Cela crée deux fichiers :
-- `shuttle.yml` : Configuration fonctionnelle (sans secrets)
-- `.env.example` : Template pour les variables d'environnement
+This creates a `shuttle.yml` file with a configuration template.
 
-### 2. Configurer les secrets
+### 2. Configure your backup
 
-Copiez `.env.example` vers `.env` et remplissez les valeurs :
+Edit `shuttle.yml` and fill in:
+- Your PostgreSQL database URL (or separate details)
+- Your SSH backup server information
+- Place your SSH private key at the path specified in `key_path`
 
-```bash
-cp .env.example .env
+### 3. Configuration file structure
+
+The `.yml` (or `.yaml`, `.json`, `.apo`) file describes the functional configuration:
+
+```yaml
+version: 1
+shuttle:
+  name: my-prod-shuttle
+  timezone: Europe/Paris
+  
+  # Source: PostgreSQL database
+  # Option 1: Full URL (recommended)
+  source:
+    url: postgresql://user:password@host:5432/database
+  # Option 2: Separate details
+  # source:
+  #   host: postgres
+  #   port: 5432
+  #   database: mydb
+  #   user: myuser
+  #   password: mypassword
+  
+  # Target: Backup server (SSH/SFTP)
+  target:
+    host: backup.example.com
+    port: 22
+    user: backup
+    key_path: ./ssh_key
+    base_path: /backups/myapp
+  
+  # Backup jobs
+  jobs:
+    - name: full-nightly
+      type: full
+      cron: "0 3 * * *"
+      format: custom
+      compress: true
+      keepLast: 7
+    - name: tables-frequent
+      type: tables
+      cron: "*/30 * * * *"
+      tables:
+        - public.users
+        - public.orders
+      format: plain
+      compress: true
+      keepLast: 48
 ```
 
-### 3. Structure du fichier `.yml`
+**Job fields:**
+- `name`: Unique job name
+- `type`: `"full"` (full dump) or `"tables"` (specific tables)
+- `cron`: Cron expression (e.g., `"0 3 * * *"` = every day at 3 AM)
+- `format`: `"plain"` (SQL) or `"custom"` (PostgreSQL format)
+- `compress`: `true` to compress the dump
+- `keepLast`: Number of backups to keep (local + remote)
+- `tables`: (optional) List of tables for `type: "tables"`
+- `timeout`: (optional) Timeout in milliseconds for pg_dump
 
-Le fichier `.yml` (ou `.yaml`, `.json`, `.apo`) décrit la configuration fonctionnelle :
+### 4. Using environment variables (optional)
 
-```json
-{
-  "version": 1,
-  "shuttle": {
-    "name": "my-prod-shuttle",
-    "timezone": "Europe/Paris",
-    "connections": {
-      "source": "prod_main",
-      "target": "prod_backup"
-    },
-    "jobs": [
-      {
-        "name": "full-nightly",
-        "type": "full",
-        "cron": "0 3 * * *",
-        "format": "custom",
-        "compress": true,
-        "keepLast": 7
-      },
-      {
-        "name": "tables-frequent",
-        "type": "tables",
-        "cron": "*/30 * * * *",
-        "tables": [
-          "public.users",
-          "public.orders"
-        ],
-        "format": "plain",
-        "compress": true,
-        "keepLast": 48
-      }
-    ]
-  }
-}
+You can use environment variables in the YAML file:
+
+```yaml
+source:
+  url: ${DATABASE_URL}
+target:
+  host: ${BACKUP_HOST}
+  user: ${BACKUP_USER}
+  key_path: ${BACKUP_KEY_PATH}
 ```
 
-**Champs du job :**
-- `name` : Nom unique du job
-- `type` : `"full"` (dump complet) ou `"tables"` (tables spécifiques)
-- `cron` : Expression cron (ex: `"0 3 * * *"` = tous les jours à 3h)
-- `format` : `"plain"` (SQL) ou `"custom"` (format PostgreSQL)
-- `compress` : `true` pour compresser le dump
-- `keepLast` : Nombre de backups à conserver (local + distant)
-- `tables` : (optionnel) Liste des tables pour `type: "tables"`
-- `timeout` : (optionnel) Timeout en millisecondes pour pg_dump
-
-### 4. Variables d'environnement
-
-Les variables d'environnement suivent la convention :
-`SHUTTLE_{CONNECTION_ID}_{TYPE}_{KEY}`
-
-**Pour la connexion source (DB) :**
-```bash
-SHUTTLE_PROD_MAIN_DB_HOST=postgres
-SHUTTLE_PROD_MAIN_DB_PORT=5432
-SHUTTLE_PROD_MAIN_DB_NAME=my_app
-SHUTTLE_PROD_MAIN_DB_USER=shuttle
-SHUTTLE_PROD_MAIN_DB_PASSWORD=supersecret
+With default values:
+```yaml
+source:
+  url: ${DATABASE_URL:-postgresql://user:pass@localhost:5432/db}
+target:
+  port: ${BACKUP_PORT:-22}
 ```
 
-**Pour la connexion target (SSH) :**
-```bash
-SHUTTLE_PROD_BACKUP_SSH_HOST=backup.example.com
-SHUTTLE_PROD_BACKUP_SSH_PORT=22
-SHUTTLE_PROD_BACKUP_SSH_USER=backup
-SHUTTLE_PROD_BACKUP_SSH_KEY_PATH=/path/to/id_ed25519
-SHUTTLE_PROD_BACKUP_SSH_KEY_PASSPHRASE=  # Optionnel
-SHUTTLE_PROD_BACKUP_BASE_PATH=/backups/my_app
-```
+## Usage
 
-**Optionnel :**
-```bash
-SHUTTLE_LOCAL_BACKUP_DIR=./backups  # Répertoire local pour les dumps
-```
-
-## Utilisation
-
-### Valider la configuration
+### Validate configuration
 
 ```bash
 shuttle validate -c shuttle.yml
 ```
 
-Vérifie que :
-- Le fichier de configuration est valide
-- Toutes les variables d'environnement requises sont présentes
+Checks that:
+- The configuration file is valid
+- All required settings are present
+- SSH key file exists
 
-### Exécuter les jobs une fois
+### Run jobs once
 
 ```bash
 shuttle run -c shuttle.yml
 ```
 
-Exécute tous les jobs immédiatement, sans attendre le cron.
+Executes all jobs immediately, without waiting for cron.
 
-### Lancer en mode daemon
+### Run as daemon
 
 ```bash
 shuttle daemon -c shuttle.yml
 ```
 
-Démarre le daemon qui planifie les jobs selon leurs expressions cron. Le processus reste actif jusqu'à interruption (Ctrl+C).
+Starts the daemon that schedules jobs according to their cron expressions. The process stays active until interrupted (Ctrl+C).
 
-### Lister les jobs
+### List jobs
 
 ```bash
 shuttle ls -c shuttle.yml
 ```
 
-Affiche la liste de tous les jobs configurés.
+Displays the list of all configured jobs.
 
-## Utilisation avec Docker
+## Docker Usage
 
-### Cas d'usage : Base de données dockerisée
+### Execution modes
 
-Shuttle fonctionne parfaitement avec des bases de données dans Docker.
+Shuttle can run in two ways in Docker:
 
-#### 1. Créer un réseau Docker
+#### Mode 1: Daemon (recommended)
 
-```bash
-docker network create shuttle-net
-```
-
-#### 2. Lancer votre base de données PostgreSQL
-
-```bash
-docker run -d \
-  --name postgres \
-  --network shuttle-net \
-  -e POSTGRES_PASSWORD=secret \
-  -e POSTGRES_DB=my_app \
-  postgres:15
-```
-
-#### 3. Préparer la configuration
-
-Créez un répertoire `config/` avec :
-- `shuttle.yml` (sans secrets)
-- `.env` (avec tous les secrets)
-
-Dans `.env`, utilisez le nom du service Docker comme host :
-```bash
-SHUTTLE_PROD_MAIN_DB_HOST=postgres  # Nom du service Docker
-SHUTTLE_PROD_MAIN_DB_PORT=5432
-# ...
-```
-
-#### 4. Lancer Shuttle en Docker
-
-```bash
-docker run -d \
-  --name shuttle \
-  --network shuttle-net \
-  -v $(pwd)/config:/config \
-  -v $(pwd)/backups:/backups \
-  --env-file ./config/.env \
-  shuttle \
-  shuttle daemon -c /config/shuttle.yml
-```
-
-**Explication :**
-- `--network shuttle-net` : Même réseau que la DB
-- `-v $(pwd)/config:/config` : Montage du répertoire de config
-- `-v $(pwd)/backups:/backups` : Montage du répertoire de backups
-- `--env-file ./config/.env` : Chargement des variables d'environnement
-
-#### 5. Avec docker-compose
+The container stays active and automatically schedules jobs according to their cron expressions.
 
 ```yaml
-version: '3.8'
+# docker-compose.yml
+version: '3.9'
 
 services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: my_app
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
     networks:
-      - shuttle-net
+      - shuttle_net
 
   shuttle:
-    build: .
-    volumes:
-      - ./config:/config
-      - ./backups:/backups
-    env_file:
-      - ./config/.env
-    command: shuttle daemon -c /config/shuttle.yml
+    image: claquettes/shuttle:latest
+    container_name: shuttle_daemon
+    restart: unless-stopped
     depends_on:
       - postgres
+    volumes:
+      - ./shuttle.yml:/config/shuttle.yml:ro
+      - ./ssh_key:/config/ssh_key:ro
+      - ./backups:/backups
     networks:
-      - shuttle-net
+      - shuttle_net
+    # Daemon mode: stays active and schedules jobs
+    command: shuttle daemon -c /config/shuttle.yml
 
 networks:
-  shuttle-net:
+  shuttle_net:
     driver: bridge
 ```
 
-## Structure des fichiers de backup
+**Configuration `shuttle.yml`:**
+```yaml
+version: 1
+shuttle:
+  name: docker-backup
+  source:
+    url: postgresql://myuser:mypassword@postgres:5432/mydb
+  target:
+    host: backup.example.com
+    user: backup
+    key_path: /config/ssh_key
+    base_path: /backups/myapp
+  jobs:
+    - name: daily
+      type: full
+      cron: "0 3 * * *"
+      format: custom
+      compress: true
+      keepLast: 7
+```
 
-Les backups sont organisés comme suit :
+#### Mode 2: One-shot (with external cron)
 
-**Local :**
+The container executes jobs once then exits. Use an external cron to launch it periodically.
+
+```yaml
+# docker-compose.yml
+services:
+  shuttle:
+    image: claquettes/shuttle:latest
+    volumes:
+      - ./shuttle.yml:/config/shuttle.yml:ro
+      - ./ssh_key:/config/ssh_key:ro
+      - ./backups:/backups
+    networks:
+      - shuttle_net
+    # One-shot mode: executes once then exits
+    command: shuttle run -c /config/shuttle.yml
+```
+
+Then use a system cron or cron container to launch periodically:
+```bash
+# System cron
+0 3 * * * docker-compose run --rm shuttle
+```
+
+### Important points
+
+1. **Database host**: In Docker, use the service name as host (e.g., `postgres` instead of `localhost`)
+2. **Docker network**: Shuttle must be on the same network as PostgreSQL
+3. **SSH key**: The `key_path` is relative to the config directory or absolute in the container
+4. **Daemon mode**: Container stays active and handles scheduling automatically
+5. **One-shot mode**: Useful if you prefer managing scheduling with an external cron
+
+## Backup file structure
+
+Backups are organized as follows:
+
+**Local:**
 ```
 ./backups/
   ├── full-nightly_2024-01-15T03-00-00.dump.gz
@@ -263,7 +330,7 @@ Les backups sont organisés comme suit :
   └── tables-frequent_2024-01-15T10-30-00.sql.gz
 ```
 
-**Distant (via SSH) :**
+**Remote (via SSH):**
 ```
 /backups/my_app/
   ├── full-nightly/
@@ -275,33 +342,33 @@ Les backups sont organisés comme suit :
           └── tables-frequent_2024-01-15T10-30-00.sql.gz
 ```
 
-## Sécurité
+## Security
 
-### Bonnes pratiques
+### Best practices
 
-1. **Ne jamais commiter `.env`** : Ajoutez `.env` à `.gitignore`
-2. **Versionner `.yml`** : Le fichier `.yml` ne contient pas de secrets, il peut être versionné
-3. **Permissions SSH** : Utilisez des clés SSH avec des permissions restrictives (`chmod 600`)
-4. **Variables d'environnement en production** : En Docker, utilisez `--env-file` ou des secrets Docker
+1. **Never commit secrets**: Add `.env` to `.gitignore` if using environment variables
+2. **Version `.yml`**: The `.yml` file can be versioned if it doesn't contain secrets (use ${VAR} for secrets)
+3. **SSH key permissions**: Use SSH keys with restrictive permissions (`chmod 600`)
+4. **Environment variables in production**: In Docker, use `--env-file` or Docker secrets
 
 ### Logs
 
-Shuttle ne log jamais :
-- Les mots de passe
-- Les clés privées SSH
-- Les passphrases
+Shuttle never logs:
+- Passwords
+- SSH private keys
+- Passphrases
 
-Seuls les hostnames et ports (non sensibles) peuvent apparaître dans les logs.
+Only hostnames and ports (non-sensitive) may appear in logs.
 
-## Développement
+## Development
 
-### Prérequis
+### Prerequisites
 
 - Node.js >= 18
-- PostgreSQL client (`pg_dump` dans le PATH)
+- PostgreSQL client (`pg_dump` in PATH)
 - TypeScript
 
-### Installation des dépendances
+### Install dependencies
 
 ```bash
 npm install
@@ -313,7 +380,7 @@ npm install
 npm run build
 ```
 
-### Développement avec hot-reload
+### Development with hot-reload
 
 ```bash
 npm run dev
@@ -330,26 +397,27 @@ npm run lint
 ```
 shuttle/
 ├── src/
-│   ├── index.ts              # Point d'entrée CLI
+│   ├── index.ts              # CLI entry point
 │   ├── cli/
-│   │   ├── commander.ts      # Définition des commandes
-│   │   └── commands/         # Implémentation des commandes
+│   │   ├── commander.ts      # Command definitions
+│   │   └── commands/         # Command implementations
 │   ├── config/
-│   │   ├── schema.ts         # Schéma Zod pour la config
-│   │   ├── loader.ts         # Chargement .yml + .env
-│   │   └── types.ts          # Types TypeScript
+│   │   ├── schema.ts         # Zod schema for config
+│   │   ├── loader.ts         # Load .yml + .env
+│   │   └── types.ts          # TypeScript types
 │   ├── core/
-│   │   ├── jobs.ts           # Exécution des jobs
-│   │   └── scheduler.ts      # Planification avec node-cron
+│   │   ├── jobs.ts           # Job execution
+│   │   └── scheduler.ts      # Scheduling with node-cron
 │   ├── services/
-│   │   ├── pgDump.ts         # Wrapper pg_dump
-│   │   ├── sshTransfer.ts    # Transfert SFTP
-│   │   └── retention.ts      # Gestion de la rétention
+│   │   ├── pgDump.ts         # pg_dump wrapper
+│   │   ├── sshTransfer.ts    # SFTP transfer
+│   │   └── retention.ts      # Retention management
 │   └── utils/
-│       ├── logger.ts         # Logging avec pino
-│       ├── env.ts            # Helpers pour env vars
-│       └── paths.ts          # Gestion des chemins
-├── examples/                 # Exemples de configuration
+│       ├── logger.ts         # Logging with pino
+│       ├── env.ts            # Environment helpers
+│       ├── database.ts        # Database URL parser
+│       └── paths.ts          # Path management
+├── examples/                 # Configuration examples
 ├── Dockerfile
 └── README.md
 ```
