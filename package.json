@@ -1,6 +1,6 @@
 {
   "name": "@claquettes/shuttle",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "PostgreSQL backup tool with SSH transfer",
   "type": "module",
   "main": "./dist/index.js",
