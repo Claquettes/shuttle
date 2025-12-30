@@ -16,12 +16,10 @@ export function loadConfig(configPath: string): ResolvedConfig {
   const resolvedPath = resolve(configPath);
   const configDir = dirname(resolvedPath);
 
-  // Vérifier que le fichier existe
   if (!existsSync(resolvedPath)) {
     throw new Error(`Configuration file not found: ${resolvedPath}`);
   }
 
-  // Charger le .env du même répertoire (si présent)
   const envPath = join(configDir, ".env");
   if (existsSync(envPath)) {
     logger.debug(`Loading .env from ${envPath}`);
@@ -30,11 +28,9 @@ export function loadConfig(configPath: string): ResolvedConfig {
     logger.debug(`No .env file found at ${envPath}, using process.env only`);
   }
 
-  // Charger et parser le fichier de configuration
   let rawConfig: unknown;
   try {
     let content = readFileSync(resolvedPath, "utf-8");
-    // Expansion des variables d'environnement dans le YAML
     content = expandEnvVars(content);
     rawConfig = parseConfigFile(content, resolvedPath);
   } catch (error) {
@@ -44,7 +40,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
     throw error;
   }
 
-  // Valider avec Zod
   const parseResult = ShuttleConfigSchema.safeParse(rawConfig);
   if (!parseResult.success) {
     const errors = parseResult.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("\n");
@@ -53,10 +48,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
 
   const validatedConfig = parseResult.data;
 
-  // Parser la configuration source (URL ou détails séparés)
   const sourceDbConfig = parseSourceConfig(validatedConfig.shuttle.source);
-
-  // Parser la configuration target (SSH)
   const targetSshConfig = parseTargetConfig(validatedConfig.shuttle.target, configDir);
 
   return {
@@ -83,7 +75,6 @@ function parseConfigFile(content: string, filePath: string): unknown {
       throw new Error("Failed to parse YAML file");
     }
   } else if (ext.endsWith(".apo")) {
-    // Support rétrocompatibilité pour .apo (JSON)
     try {
       return JSON.parse(content);
     } catch {
@@ -101,7 +92,6 @@ function parseSourceConfig(source: { url?: string; host?: string; port?: number;
     return parseDatabaseUrl(source.url);
   }
 
-  // Détails séparés
   if (!source.host || !source.database || !source.user || source.password === undefined) {
     throw new Error("Source configuration must have either 'url' or all of: host, database, user, password");
   }
@@ -124,7 +114,6 @@ function parseSourceConfig(source: { url?: string; host?: string; port?: number;
  * Parse la configuration target (SSH)
  */
 function parseTargetConfig(target: { host: string; port?: number; user: string; key_path: string; key_passphrase?: string; base_path: string }, configDir: string): SSHConfig {
-  // Résoudre le chemin de la clé (relatif au répertoire de config ou absolu)
   const keyPath = target.key_path.startsWith("/")
     ? target.key_path
     : resolve(configDir, target.key_path);
@@ -150,7 +139,6 @@ function parseTargetConfig(target: { host: string; port?: number; user: string; 
  */
 function expandEnvVars(content: string): string {
   return content.replace(/\$\{([^}]+)\}/g, (match, expr) => {
-    // Support ${VAR:-default}
     const parts = expr.split(":-");
     const varName = parts[0].trim();
     const defaultValue = parts[1] ? parts[1].trim() : undefined;
@@ -164,7 +152,6 @@ function expandEnvVars(content: string): string {
       return defaultValue;
     }
 
-    // Si pas de valeur et pas de default, on laisse tel quel (sera validé plus tard)
     return match;
   });
 }
@@ -178,7 +165,6 @@ export function validateConfig(resolvedConfig: ResolvedConfig): {
 } {
   const errors: string[] = [];
 
-  // Vérifier que la clé SSH existe
   if (!existsSync(resolvedConfig.targetSshConfig.keyPath)) {
     errors.push(`SSH key not found: ${resolvedConfig.targetSshConfig.keyPath}`);
   }

@@ -18,7 +18,6 @@ export function daemonCommand(): Command {
 
       let scheduled: ReturnType<typeof scheduleJobs> = [];
 
-      // Gestion de l'arrêt propre
       const shutdown = () => {
         logger.info("Shutting down...");
         stopScheduledJobs(scheduled);
@@ -32,7 +31,6 @@ export function daemonCommand(): Command {
         logger.info(`Loading configuration from: ${options.config}`);
         const resolvedConfig = loadConfig(options.config);
 
-        // Valider la configuration
         const { validateConfig } = await import("../../config/loader.js");
         const validation = validateConfig(resolvedConfig);
         if (!validation.valid) {
@@ -46,7 +44,6 @@ export function daemonCommand(): Command {
         logger.info(`Starting Shuttle daemon: ${resolvedConfig.config.shuttle.name}`);
         logger.info(`Timezone: ${resolvedConfig.config.shuttle.timezone}`);
 
-        // Planifier les jobs
         scheduled = scheduleJobs(resolvedConfig, (result) => {
           if (result.success) {
             logger.info(`[${result.jobName}] Scheduled execution completed successfully`);
@@ -63,9 +60,6 @@ export function daemonCommand(): Command {
         logger.info("");
         logger.info("Shuttle daemon is running. Press Ctrl+C to stop.");
         logger.info("");
-
-        // Garder le processus actif
-        // Les jobs sont exécutés par node-cron
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error(`Daemon failed to start: ${message}`);

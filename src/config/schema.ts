@@ -7,7 +7,7 @@ import { z } from "zod";
 export const JobSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["full", "tables"]),
-  cron: z.string().min(1), // Validation réelle faite par node-cron
+  cron: z.string().min(1),
   format: z.enum(["plain", "custom"]).default("custom"),
   compress: z.boolean().default(true),
   keepLast: z.number().int().positive(),
@@ -20,14 +20,12 @@ export const JobSchema = z.object({
  * Supporte soit une URL, soit des détails séparés
  */
 export const SourceConfigSchema = z.union([
-  // Option 1: URL PostgreSQL
   z.object({
     url: z.string().refine(
       (val) => val.startsWith("postgresql://") || val.startsWith("postgres://"),
       { message: "URL must start with postgresql:// or postgres://" }
     ),
   }),
-  // Option 2: Détails séparés
   z.object({
     host: z.string().min(1),
     port: z.number().int().positive().max(65535),

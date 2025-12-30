@@ -16,7 +16,6 @@ export function initCommand(): Command {
       return;
     }
 
-    // Créer shuttle.yml avec la nouvelle structure simplifiée
     const ymlContent = `version: 1
 shuttle:
   name: my-shuttle

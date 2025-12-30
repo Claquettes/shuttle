@@ -22,21 +22,19 @@ export async function transferFile(
   }
 
   const filename = basename(localPath);
-  const remotePath = join(remoteDir, filename).replace(/\\/g, "/"); // Normaliser les slashes
+  const remotePath = join(remoteDir, filename).replace(/\\/g, "/");
 
   logger.debug(`[SSH] Connecting to ${sshConfig.host}:${sshConfig.port} as ${sshConfig.user}`);
 
   const client = new SftpClient();
 
   try {
-    // Charger la clé privée
     if (!existsSync(sshConfig.keyPath)) {
       throw new Error(`SSH key not found: ${sshConfig.keyPath}`);
     }
 
     const privateKey = readFileSync(sshConfig.keyPath, "utf-8");
 
-    // Connexion
     await client.connect({
       host: sshConfig.host,
       port: sshConfig.port,
@@ -48,20 +46,16 @@ export async function transferFile(
 
     logger.debug(`[SSH] Connected successfully`);
 
-    // Créer le répertoire distant s'il n'existe pas
     try {
-      await client.mkdir(remoteDir, true); // true = récursif
+      await client.mkdir(remoteDir, true);
       logger.debug(`[SSH] Ensured remote directory exists: ${remoteDir}`);
     } catch (err) {
-      // Le répertoire existe peut-être déjà, continuer
       logger.debug(`[SSH] Directory creation (may already exist): ${err}`);
     }
 
-    // Transférer le fichier
     logger.info(`[SSH] Uploading ${filename} to ${remotePath}...`);
     await client.put(localPath, remotePath);
 
-    // Vérifier que le fichier a bien été transféré
     const stats = await client.stat(remotePath);
     logger.info(`[SSH] Upload completed: ${remotePath} (${formatBytes(stats.size)})`);
 
@@ -77,7 +71,6 @@ export async function transferFile(
     try {
       await client.end();
     } catch (err) {
-      // Ignorer les erreurs de fermeture
       logger.debug(`[SSH] Error closing connection: ${err}`);
     }
   }
@@ -105,7 +98,6 @@ export async function listRemoteFiles(remoteDir: string, sshConfig: SSHConfig): 
       const files = await client.list(remoteDir);
       return files.map((f: { name: string }) => f.name).filter((name: string) => !name.startsWith("."));
     } catch (err) {
-      // Le répertoire n'existe peut-être pas encore
       if (err instanceof Error && err.message.includes("No such file")) {
         return [];
       }
@@ -147,7 +139,6 @@ export async function deleteRemoteFile(remotePath: string, sshConfig: SSHConfig)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn(`[SSH] Failed to delete remote file ${remotePath}: ${message}`);
-    // Ne pas throw, on continue même si la suppression échoue
   } finally {
     try {
       await client.end();

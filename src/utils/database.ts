@@ -6,7 +6,6 @@ import type { DatabaseConfig } from "./env.js";
  */
 export function parseDatabaseUrl(url: string): DatabaseConfig {
   try {
-    // Support postgresql:// et postgres://
     const normalizedUrl = url.startsWith("postgres://")
       ? url.replace("postgres://", "postgresql://")
       : url;
@@ -15,7 +14,7 @@ export function parseDatabaseUrl(url: string): DatabaseConfig {
 
     const host = parsed.hostname;
     const port = parseInt(parsed.port || "5432", 10);
-    const database = parsed.pathname.slice(1); // Remove leading /
+    const database = parsed.pathname.slice(1);
     const user = decodeURIComponent(parsed.username);
     const password = decodeURIComponent(parsed.password);
 

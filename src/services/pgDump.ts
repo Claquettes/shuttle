@@ -32,37 +32,29 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
   logger.info(`[${job.name}] Starting pg_dump...`);
   logger.debug(`[${job.name}] DB: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 
-  // Construire la commande pg_dump
   const args: string[] = [];
 
-  // Format
   if (job.format === "custom") {
     args.push("-F", "c");
   } else {
     args.push("-F", "p");
   }
 
-  // Host, port, database, user
   args.push("-h", dbConfig.host);
   args.push("-p", dbConfig.port.toString());
   args.push("-d", dbConfig.database);
   args.push("-U", dbConfig.user);
 
-  // Tables spécifiques si type = "tables"
   if (job.type === "tables" && job.tables && job.tables.length > 0) {
     for (const table of job.tables) {
       args.push("-t", table);
     }
   }
 
-  // Options supplémentaires
-  args.push("--no-owner", "--no-acl"); // Évite les problèmes de permissions
-
-  // Fichier de sortie
+  args.push("--no-owner", "--no-acl");
   args.push("-f", outputPath);
 
   return new Promise((resolve, reject) => {
-    // Préparer l'environnement avec PGPASSWORD
     const env = {
       ...process.env,
       PGPASSWORD: dbConfig.password,
@@ -93,7 +85,6 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
       clearTimeout(timeoutId);
 
       if (code !== 0) {
-        // Nettoyer le fichier en cas d'erreur
         if (existsSync(outputPath)) {
           try {
             unlinkSync(outputPath);
@@ -108,13 +99,11 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
         return;
       }
 
-      // Vérifier que le fichier existe
       if (!existsSync(outputPath)) {
         reject(new Error(`Output file was not created: ${outputPath}`));
         return;
       }
 
-          // Compression si demandée
       let finalPath = outputPath;
       let finalSize = 0;
 
@@ -124,7 +113,7 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
           const compressed = gzipSync(content);
           const compressedPath = `${outputPath}.gz`;
           writeFileSync(compressedPath, compressed);
-          unlinkSync(outputPath); // Supprimer le fichier non compressé
+          unlinkSync(outputPath);
           finalPath = compressedPath;
           finalSize = compressed.length;
           logger.debug(`[${job.name}] Compressed dump: ${finalSize} bytes`);

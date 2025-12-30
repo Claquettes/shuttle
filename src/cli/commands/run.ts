@@ -20,7 +20,6 @@ export function runCommand(): Command {
         logger.info(`Loading configuration from: ${options.config}`);
         const resolvedConfig = loadConfig(options.config);
 
-        // Valider la configuration
         const { validateConfig } = await import("../../config/loader.js");
         const validation = validateConfig(resolvedConfig);
         if (!validation.valid) {

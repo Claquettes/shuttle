@@ -25,7 +25,6 @@ export async function applyRetention(
     remoteDeleted: 0,
   };
 
-  // Rétention locale
   try {
     const localDeleted = applyLocalRetention(job);
     result.localDeleted = localDeleted;
@@ -33,7 +32,6 @@ export async function applyRetention(
     logger.warn(`[${job.name}] Local retention failed: ${error}`);
   }
 
-  // Rétention distante
   try {
     const remoteDeleted = await applyRemoteRetention(job, sshConfig, remoteJobDir);
     result.remoteDeleted = remoteDeleted;
@@ -51,7 +49,6 @@ function applyLocalRetention(job: Job): number {
   const backupDir = getLocalBackupDir();
   const files = readdirSync(backupDir);
 
-  // Filtrer les fichiers correspondant au job
   const jobFiles = files
     .filter((f) => f.startsWith(`${job.name}_`))
     .map((f) => ({
@@ -59,9 +56,8 @@ function applyLocalRetention(job: Job): number {
       path: join(backupDir, f),
       mtime: statSync(join(backupDir, f)).mtime,
     }))
-    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Plus récent en premier
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-  // Garder les N derniers
   const toKeep = job.keepLast;
   if (jobFiles.length <= toKeep) {
     logger.debug(`[${job.name}] Local: ${jobFiles.length} files, keeping all (limit: ${toKeep})`);
@@ -97,17 +93,14 @@ async function applyRemoteRetention(
   try {
     const files = await listRemoteFiles(remoteJobDir, sshConfig);
 
-    // Filtrer les fichiers correspondant au job
     const jobFiles = files
       .filter((f) => f.startsWith(`${job.name}_`))
       .map((f) => ({
         name: f,
-        // On ne peut pas obtenir mtime facilement via SFTP, on utilise le nom de fichier
-        // Le format est: jobName_YYYY-MM-DDTHH-MM-SS.ext(.gz)
         timestamp: extractTimestamp(f),
       }))
       .filter((f): f is { name: string; timestamp: Date } => f.timestamp !== null)
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()); // Plus récent en premier
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     const toKeep = job.keepLast;
     if (jobFiles.length <= toKeep) {
@@ -138,27 +131,21 @@ async function applyRemoteRetention(
   }
 }
 
-/**
- * Extrait le timestamp depuis le nom de fichier
- * Format attendu: jobName_YYYY-MM-DDTHH-MM-SS.ext(.gz)
- */
 function extractTimestamp(filename: string): Date | null {
-  // Pattern: jobName_YYYY-MM-DDTHH-MM-SS
   const match = filename.match(/_(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
   if (!match) {
     return null;
   }
 
   try {
-    // Convertir YYYY-MM-DDTHH-MM-SS en YYYY-MM-DDTHH:MM:SS
     const dateTimeStr = match[1];
     const parts = dateTimeStr.split("T");
     if (parts.length !== 2) {
       return null;
     }
 
-    const datePart = parts[0]; // YYYY-MM-DD
-    const timePart = parts[1].replace(/-/g, ":"); // HH-MM-SS -> HH:MM:SS
+    const datePart = parts[0];
+    const timePart = parts[1].replace(/-/g, ":");
     const isoString = `${datePart}T${timePart}`;
 
     return new Date(isoString);

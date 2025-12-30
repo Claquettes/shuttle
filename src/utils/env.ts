@@ -118,7 +118,6 @@ export function validateSSHEnv(connectionId: string): {
     }
   }
 
-  // PORT a une valeur par défaut (22), donc on ne le vérifie que s'il est présent
   const port = process.env[`${prefix}PORT`];
   if (port && (isNaN(parseInt(port, 10)) || parseInt(port, 10) < 1 || parseInt(port, 10) > 65535)) {
     missing.push(`${prefix}PORT (invalid value)`);

@@ -22,7 +22,6 @@ export function scheduleJobs(
 
   for (const job of resolvedConfig.config.shuttle.jobs) {
     try {
-      // Valider l'expression cron
       if (!cron.validate(job.cron)) {
         logger.error(`[${job.name}] Invalid cron expression: ${job.cron}`);
         continue;

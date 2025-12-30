@@ -29,26 +29,20 @@ export async function executeJob(
   logger.info(`[${job.name}] Starting job execution...`);
 
   try {
-    // 1. Utiliser les configurations déjà parsées
     const dbConfig = resolvedConfig.sourceDbConfig;
     const sshConfig = resolvedConfig.targetSshConfig;
 
-    // 2. Exécuter pg_dump
     const dumpResult = await runPgDump({
       dbConfig,
       job,
       timeout: job.timeout,
     });
 
-    // 3. Préparer le répertoire distant
     const remoteJobDir = join(sshConfig.basePath, job.name).replace(/\\/g, "/");
-    const dateDir = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const dateDir = new Date().toISOString().split("T")[0];
     const remoteDateDir = join(remoteJobDir, dateDir).replace(/\\/g, "/");
 
-    // 4. Transférer le fichier
     const transferResult = await transferFile(dumpResult.filePath, remoteDateDir, sshConfig);
-
-    // 5. Appliquer la rétention
     const retentionResult = await applyRetention(job, sshConfig, remoteJobDir);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
