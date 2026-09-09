@@ -1,0 +1,207 @@
+name: Release
+
+# Publication déclenchée par un tag de version (ex: v1.1.0).
+#   git tag v1.1.0 && git push origin v1.1.0
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Tout construire et vérifier, sans publier"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Rien n'est publié tant que la suite complète n'est pas verte.
+  verify:
+    name: Vérification avant publication
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: testdb
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U testuser -d testdb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SHUTTLE_TEST_PG_EXTERNAL: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: testdb
+      PGUSER: testuser
+      PGPASSWORD: testpw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installer le client PostgreSQL 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Suite complète
+        run: npm run test:full
+
+      - name: Le tag doit correspondre à package.json
+        id: version
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            if [ "$TAG" != "$PKG" ]; then
+              echo "Le tag ($TAG) ne correspond pas à package.json ($PKG)."
+              echo "Mettre à jour la version puis re-taguer."
+              exit 1
+            fi
+          fi
+          echo "Version à publier : $PKG"
+
+  npm:
+    name: Publier sur npm
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write        # provenance npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      - name: Publication (dry-run)
+        if: github.event_name == 'workflow_dispatch'
+        run: npm publish --access public --dry-run
+      - name: Publication
+        if: github.event_name == 'push'
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  docker:
+    name: Publier les images Docker
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write        # ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Connexion à Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Connexion à GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calcul des tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            claquettes/shuttle
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+
+      # On construit d'abord pour l'architecture locale afin de faire tourner le
+      # smoke test sur l'image réelle avant toute publication.
+      - name: Build de vérification (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.production
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: shuttle:verify
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test de l'image
+        run: bash tests/docker-smoke.sh shuttle:verify
+
+      - name: Build et publication multi-arch
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.production
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  github-release:
+    name: Release GitHub
+    needs: [verify, npm, docker]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Créer la release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            Version `${{ needs.verify.outputs.version }}`.
+
+            **npm**
+            ```bash
+            npm install -g @claquettes/shuttle@${{ needs.verify.outputs.version }}
+            ```
+
+            **Docker**
+            ```bash
+            docker pull claquettes/shuttle:${{ needs.verify.outputs.version }}
+            ```

@@ -1,5 +1,5 @@
 declare module "ssh2-sftp-client" {
-  interface FileInfo {
+  export interface FileInfo {
     type: string;
     name: string;
     size: number;
@@ -19,9 +19,11 @@ declare module "ssh2-sftp-client" {
     port?: number;
     username: string;
     password?: string;
-    privateKey?: string;
+    privateKey?: string | Buffer;
     passphrase?: string;
     readyTimeout?: number;
+    /** Vérification de la clé d'hôte : retourner false rejette la connexion */
+    hostVerifier?: (key: Buffer) => boolean;
   }
 
   class SftpClient {
@@ -30,10 +32,11 @@ declare module "ssh2-sftp-client" {
     put(localPath: string, remotePath: string): Promise<void>;
     stat(path: string): Promise<{ size: number }>;
     list(path: string): Promise<FileInfo[]>;
-    delete(path: string): Promise<void>;
+    exists(path: string): Promise<false | "d" | "-" | "l">;
+    rename(fromPath: string, toPath: string): Promise<void>;
+    delete(path: string, noErrorOK?: boolean): Promise<void>;
     end(): Promise<void>;
   }
 
   export default SftpClient;
 }
-

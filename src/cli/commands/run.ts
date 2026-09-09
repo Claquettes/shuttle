@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import { loadConfig } from "../../config/loader.js";
 import { executeAllJobs } from "../../core/jobs.js";
-import { logger, initLogger } from "../../utils/logger.js";
+import { logger } from "../../utils/logger.js";
+import { resolveCommonOptions } from "../options.js";
 
 export function runCommand(): Command {
   const cmd = new Command("run");
@@ -9,16 +10,12 @@ export function runCommand(): Command {
   cmd
     .description("Run all jobs once immediately")
     .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
-    .action(async (options) => {
-      const globalOpts = cmd.parent?.opts() || {};
-      initLogger({
-        verbose: globalOpts.verbose,
-        quiet: globalOpts.quiet,
-      });
+    .action(async () => {
+      const { configPath } = resolveCommonOptions(cmd);
 
       try {
-        logger.info(`Loading configuration from: ${options.config}`);
-        const resolvedConfig = loadConfig(options.config);
+        logger.info(`Loading configuration from: ${configPath}`);
+        const resolvedConfig = loadConfig(configPath);
 
         const { validateConfig } = await import("../../config/loader.js");
         const validation = validateConfig(resolvedConfig);
@@ -63,4 +60,3 @@ export function runCommand(): Command {
 
   return cmd;
 }
-

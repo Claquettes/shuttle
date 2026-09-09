@@ -1,7 +1,11 @@
 import { Command } from "commander";
 import { loadConfig } from "../../config/loader.js";
-import { scheduleJobs, stopScheduledJobs } from "../../core/scheduler.js";
-import { logger, initLogger } from "../../utils/logger.js";
+import { scheduleJobs, type Scheduler } from "../../core/scheduler.js";
+import { logger } from "../../utils/logger.js";
+import { resolveCommonOptions } from "../options.js";
+
+/** Delai laisse aux sauvegardes en cours pour se terminer a l'arret */
+const SHUTDOWN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function daemonCommand(): Command {
   const cmd = new Command("daemon");
@@ -9,27 +13,36 @@ export function daemonCommand(): Command {
   cmd
     .description("Run Shuttle as a daemon with scheduled jobs")
     .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
-    .action(async (options) => {
-      const globalOpts = cmd.parent?.opts() || {};
-      initLogger({
-        verbose: globalOpts.verbose,
-        quiet: globalOpts.quiet,
-      });
+    .action(async () => {
+      const { configPath } = resolveCommonOptions(cmd);
 
-      let scheduled: ReturnType<typeof scheduleJobs> = [];
+      let scheduler: Scheduler | null = null;
+      let shuttingDown = false;
 
-      const shutdown = () => {
-        logger.info("Shutting down...");
-        stopScheduledJobs(scheduled);
-        process.exit(0);
+      /**
+       * Arret gracieux : on desarme les crons puis on laisse les sauvegardes en
+       * cours se terminer. Couper un dump ou un transfert en vol laisserait une
+       * sauvegarde incomplete cote serveur de backup.
+       */
+      const shutdown = async (signal: string) => {
+        if (shuttingDown) {
+          logger.warn(`Received ${signal} again, forcing exit. Running backups are aborted.`);
+          process.exit(1);
+        }
+        shuttingDown = true;
+
+        logger.info(`Received ${signal}, shutting down...`);
+        const clean = scheduler ? await scheduler.shutdown(SHUTDOWN_TIMEOUT_MS) : true;
+        logger.info("Shutdown complete.");
+        process.exit(clean ? 0 : 1);
       };
 
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
+      process.on("SIGINT", () => void shutdown("SIGINT"));
+      process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
       try {
-        logger.info(`Loading configuration from: ${options.config}`);
-        const resolvedConfig = loadConfig(options.config);
+        logger.info(`Loading configuration from: ${configPath}`);
+        const resolvedConfig = loadConfig(configPath);
 
         const { validateConfig } = await import("../../config/loader.js");
         const validation = validateConfig(resolvedConfig);
@@ -44,7 +57,7 @@ export function daemonCommand(): Command {
         logger.info(`Starting Shuttle daemon: ${resolvedConfig.config.shuttle.name}`);
         logger.info(`Timezone: ${resolvedConfig.config.shuttle.timezone}`);
 
-        scheduled = scheduleJobs(resolvedConfig, (result) => {
+        scheduler = scheduleJobs(resolvedConfig, (result) => {
           if (result.success) {
             logger.info(`[${result.jobName}] Scheduled execution completed successfully`);
           } else {
@@ -52,7 +65,7 @@ export function daemonCommand(): Command {
           }
         });
 
-        if (scheduled.length === 0) {
+        if (scheduler.size === 0) {
           logger.warn("No jobs were scheduled. Exiting.");
           process.exit(1);
         }
@@ -69,4 +82,3 @@ export function daemonCommand(): Command {
 
   return cmd;
 }
-

@@ -26,12 +26,22 @@ RUN npm run build
 # Production stage
 FROM node:22-bookworm-slim
 
-# Install runtime dependencies (postgresql-client and openssh-client)
+# Client PostgreSQL depuis le dépôt officiel PGDG.
+# Le paquet de Debian bookworm est figé en 15, or pg_dump REFUSE de dumper un
+# serveur plus récent que lui ("server version mismatch"). Installer la dernière
+# version majeure permet de sauvegarder tous les serveurs jusqu'à celle-ci.
+ARG PG_MAJOR=18
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    postgresql-client \
-    openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+    install -d /usr/share/postgresql-common/pgdg && \
+    curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+      https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends "postgresql-client-${PG_MAJOR}" openssh-client && \
+    apt-get purge -y curl gnupg && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
@@ -46,20 +56,32 @@ RUN npm ci --production && \
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
-# Create backup directory
+# Répertoire des sauvegardes locales.
+# Sans cette variable, le code résout "./backups" depuis le WORKDIR (/app) et
+# écrit dans /app/backups : le volume monté sur /backups serait ignoré et les
+# copies locales perdues à chaque recréation du conteneur.
 RUN mkdir -p /backups
+ENV SHUTTLE_LOCAL_BACKUP_DIR=/backups
 
-# Create non-root user for security
-# If UID 1000 exists, use it; otherwise create user with UID 1000
-RUN (getent passwd 1000 >/dev/null && \
-     (getent passwd shuttle >/dev/null || useradd -m -u 1000 shuttle)) || \
-    useradd -m -u 1000 shuttle 2>/dev/null || \
-    useradd -m shuttle && \
-    chown -R shuttle:shuttle /app /backups 2>/dev/null || \
-    chown -R 1000:1000 /app /backups
+# Point d'entrée (chemin absolu + tolérance à la forme `shuttle <cmd>`)
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    printf '#!/bin/sh\nexec node /app/dist/index.js "$@"\n' > /usr/local/bin/shuttle && \
+    chmod +x /usr/local/bin/shuttle
+
+# Utilisateur non-root, UID/GID FIXES.
+# L'image node occupe déjà l'UID 1000, donc l'ancienne logique de repli
+# aboutissait à 1001 « par accident » : une mise à jour de l'image de base
+# pouvait changer l'UID et casser les permissions des volumes montés.
+# 1001 est figé ici pour rester compatible avec les déploiements existants.
+ARG SHUTTLE_UID=1001
+ARG SHUTTLE_GID=1001
+RUN groupadd -g "${SHUTTLE_GID}" shuttle && \
+    useradd -m -u "${SHUTTLE_UID}" -g "${SHUTTLE_GID}" shuttle && \
+    chown -R "${SHUTTLE_UID}:${SHUTTLE_GID}" /app /backups
 
 USER shuttle
 
-# Entry point
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["--help"]
 

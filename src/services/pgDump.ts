@@ -1,11 +1,20 @@
 import { spawn } from "child_process";
-import { writeFileSync, unlinkSync, existsSync, readFileSync, statSync } from "fs";
+import {
+  createReadStream,
+  createWriteStream,
+  unlinkSync,
+  existsSync,
+  statSync,
+  chmodSync,
+} from "fs";
+import { pipeline } from "stream/promises";
+import { createGzip } from "zlib";
 import { join } from "path";
 import type { DatabaseConfig } from "../utils/env.js";
 import type { Job } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
+import { formatBytes } from "../utils/format.js";
 import { getLocalBackupDir, generateDumpFilename } from "../utils/paths.js";
-import { gzipSync } from "zlib";
 
 export interface PgDumpOptions {
   dbConfig: DatabaseConfig;
@@ -19,6 +28,10 @@ export interface PgDumpResult {
 }
 
 const DEFAULT_TIMEOUT = 3600000; // 1 hour
+/** Délai laissé à pg_dump pour s'arrêter proprement avant SIGKILL */
+const KILL_GRACE_MS = 10000;
+/** Permissions d'un dump : lecture/écriture par le propriétaire uniquement */
+const DUMP_MODE = 0o600;
 
 /**
  * Exécute pg_dump et génère un fichier de dump
@@ -29,23 +42,78 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
   const filename = generateDumpFilename(job.name, job.format, false, new Date());
   const outputPath = join(outputDir, filename);
 
+  if (job.type === "tables" && (!job.tables || job.tables.length === 0)) {
+    throw new Error(`Job '${job.name}' is of type 'tables' but declares no table`);
+  }
+
   logger.info(`[${job.name}] Starting pg_dump...`);
   logger.debug(`[${job.name}] DB: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 
-  const args: string[] = [];
+  await spawnPgDump({ dbConfig, job, timeout, outputPath });
 
-  if (job.format === "custom") {
-    args.push("-F", "c");
-  } else {
-    args.push("-F", "p");
+  // pg_dump peut sortir en code 0 tout en produisant un fichier vide (disque
+  // plein, permissions). Un dump vide qui remonterait jusqu'à la rétention
+  // ferait supprimer de bonnes sauvegardes : on refuse ici.
+  const rawSize = statSync(outputPath).size;
+  if (rawSize === 0) {
+    safeUnlink(outputPath, job.name);
+    throw new Error(`pg_dump produced an empty file for job '${job.name}'`);
   }
 
+  chmodSync(outputPath, DUMP_MODE);
+
+  if (!job.compress) {
+    logger.info(`[${job.name}] pg_dump completed: ${outputPath} (${formatBytes(rawSize)})`);
+    return { filePath: outputPath, size: rawSize };
+  }
+
+  const compressedPath = `${outputPath}.gz`;
+  try {
+    // Compression en flux : un dump de plusieurs Go ne doit jamais être
+    // chargé intégralement en mémoire.
+    await pipeline(
+      createReadStream(outputPath),
+      createGzip(),
+      createWriteStream(compressedPath, { mode: DUMP_MODE })
+    );
+  } catch (error) {
+    safeUnlink(compressedPath, job.name);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn(`[${job.name}] Compression failed, keeping uncompressed dump: ${message}`);
+    logger.info(`[${job.name}] pg_dump completed: ${outputPath} (${formatBytes(rawSize)})`);
+    return { filePath: outputPath, size: rawSize };
+  }
+
+  const compressedSize = statSync(compressedPath).size;
+  if (compressedSize === 0) {
+    safeUnlink(compressedPath, job.name);
+    throw new Error(`Compression produced an empty file for job '${job.name}'`);
+  }
+
+  safeUnlink(outputPath, job.name);
+  logger.info(
+    `[${job.name}] pg_dump completed: ${compressedPath} (${formatBytes(compressedSize)})`
+  );
+
+  return { filePath: compressedPath, size: compressedSize };
+}
+
+function spawnPgDump(params: {
+  dbConfig: DatabaseConfig;
+  job: Job;
+  timeout: number;
+  outputPath: string;
+}): Promise<void> {
+  const { dbConfig, job, timeout, outputPath } = params;
+
+  const args: string[] = [];
+  args.push("-F", job.format === "custom" ? "c" : "p");
   args.push("-h", dbConfig.host);
   args.push("-p", dbConfig.port.toString());
   args.push("-d", dbConfig.database);
   args.push("-U", dbConfig.user);
 
-  if (job.type === "tables" && job.tables && job.tables.length > 0) {
+  if (job.type === "tables" && job.tables) {
     for (const table of job.tables) {
       args.push("-t", table);
     }
@@ -55,45 +123,51 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
   args.push("-f", outputPath);
 
   return new Promise((resolve, reject) => {
-    const env = {
-      ...process.env,
-      PGPASSWORD: dbConfig.password,
-    };
-
+    // Le mot de passe passe par l'environnement : le mettre dans argv
+    // l'exposerait à tout process capable de lire la table des processus.
     const pgDump = spawn("pg_dump", args, {
-      env,
+      env: { ...process.env, PGPASSWORD: dbConfig.password },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    let settled = false;
+    let killTimer: NodeJS.Timeout | undefined;
+    let timedOut = false;
+
     const timeoutId = setTimeout(() => {
+      timedOut = true;
+      logger.error(`[${job.name}] pg_dump exceeded ${timeout}ms, terminating...`);
       pgDump.kill("SIGTERM");
-      reject(new Error(`pg_dump timeout after ${timeout}ms`));
+      // Si pg_dump ignore SIGTERM, on ne laisse pas le process traîner.
+      killTimer = setTimeout(() => pgDump.kill("SIGKILL"), KILL_GRACE_MS);
     }, timeout);
 
-    let stdout = "";
-    let stderr = "";
-
-    pgDump.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    pgDump.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    pgDump.on("close", (code) => {
+    const cleanupTimers = () => {
       clearTimeout(timeoutId);
+      if (killTimer) clearTimeout(killTimer);
+    };
+
+    let stderr = "";
+    pgDump.stderr.on("data", (data) => {
+      // Borne la mémoire même si pg_dump devient très bavard.
+      if (stderr.length < 64 * 1024) stderr += data.toString();
+    });
+    pgDump.stdout.on("data", () => undefined);
+
+    pgDump.on("close", (code, signal) => {
+      cleanupTimers();
+      if (settled) return;
+      settled = true;
+
+      if (timedOut) {
+        safeUnlink(outputPath, job.name);
+        reject(new Error(`pg_dump timeout after ${timeout}ms`));
+        return;
+      }
 
       if (code !== 0) {
-        if (existsSync(outputPath)) {
-          try {
-            unlinkSync(outputPath);
-          } catch (err) {
-            logger.warn(`[${job.name}] Failed to cleanup output file: ${err}`);
-          }
-        }
-
-        const errorMsg = stderr || stdout || `pg_dump exited with code ${code}`;
+        safeUnlink(outputPath, job.name);
+        const errorMsg = stderr.trim() || `pg_dump exited with code ${code} (signal ${signal})`;
         logger.error(`[${job.name}] pg_dump failed: ${errorMsg}`);
         reject(new Error(`pg_dump failed with code ${code}: ${errorMsg}`));
         return;
@@ -104,48 +178,24 @@ export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
         return;
       }
 
-      let finalPath = outputPath;
-      let finalSize = 0;
-
-      if (job.compress) {
-        try {
-          const content = readFileSync(outputPath);
-          const compressed = gzipSync(content);
-          const compressedPath = `${outputPath}.gz`;
-          writeFileSync(compressedPath, compressed);
-          unlinkSync(outputPath);
-          finalPath = compressedPath;
-          finalSize = compressed.length;
-          logger.debug(`[${job.name}] Compressed dump: ${finalSize} bytes`);
-        } catch (err) {
-          logger.warn(`[${job.name}] Compression failed, keeping uncompressed: ${err}`);
-          finalSize = statSync(outputPath).size;
-        }
-      } else {
-        finalSize = statSync(outputPath).size;
-      }
-
-      logger.info(`[${job.name}] pg_dump completed: ${finalPath} (${formatBytes(finalSize)})`);
-
-      resolve({
-        filePath: finalPath,
-        size: finalSize,
-      });
+      resolve();
     });
 
     pgDump.on("error", (err) => {
-      clearTimeout(timeoutId);
+      cleanupTimers();
+      if (settled) return;
+      settled = true;
       logger.error(`[${job.name}] Failed to spawn pg_dump: ${err.message}`);
       reject(new Error(`Failed to execute pg_dump: ${err.message}`));
     });
   });
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
+function safeUnlink(path: string, jobName: string): void {
+  if (!existsSync(path)) return;
+  try {
+    unlinkSync(path);
+  } catch (err) {
+    logger.warn(`[${jobName}] Failed to cleanup ${path}: ${err}`);
+  }
 }
-

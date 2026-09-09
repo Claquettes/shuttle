@@ -16,9 +16,9 @@ export function findConfigDir(configPath: string): string {
 /**
  * Crée un répertoire s'il n'existe pas
  */
-export function ensureDir(dirPath: string): void {
+export function ensureDir(dirPath: string, mode?: number): void {
   if (!existsSync(dirPath)) {
-    mkdirSync(dirPath, { recursive: true });
+    mkdirSync(dirPath, { recursive: true, mode });
   }
 }
 
@@ -41,7 +41,8 @@ export function generateDumpFilename(
 export function getLocalBackupDir(): string {
   const dir = process.env.SHUTTLE_LOCAL_BACKUP_DIR || "./backups";
   const resolved = resolvePath(dir);
-  ensureDir(resolved);
+  // Les dumps contiennent la totalité des données de production : le
+  // répertoire ne doit pas être lisible par les autres utilisateurs.
+  ensureDir(resolved, 0o700);
   return resolved;
 }
-
