@@ -152,7 +152,7 @@ jobs:
       # On construit d'abord pour l'architecture locale afin de faire tourner le
       # smoke test sur l'image réelle avant toute publication.
       - name: Build de vérification (amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.production
@@ -167,7 +167,7 @@ jobs:
         run: bash tests/docker-smoke.sh shuttle:verify
 
       - name: Build et publication multi-arch
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile.production
