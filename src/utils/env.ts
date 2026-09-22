@@ -17,6 +17,12 @@ export interface SSHConfig {
   keyPath: string;
   keyPassphrase?: string;
   basePath: string;
+  /** Chemin d'un fichier known_hosts (format OpenSSH) */
+  knownHostsPath?: string;
+  /** Empreintes acceptées, au format OpenSSH `SHA256:base64` */
+  hostFingerprints?: string[];
+  /** Refuse la connexion si aucune vérification d'hôte n'est configurée */
+  strictHostKey: boolean;
 }
 
 /**
@@ -64,6 +70,8 @@ export function getSSHConfig(connectionId: string): SSHConfig {
     keyPath,
     keyPassphrase,
     basePath,
+    knownHostsPath: process.env[`${prefix}KNOWN_HOSTS`],
+    strictHostKey: process.env[`${prefix}STRICT_HOST_KEY`] === "true",
   };
 }
 
@@ -128,4 +136,3 @@ export function validateSSHEnv(connectionId: string): {
     missing,
   };
 }
-

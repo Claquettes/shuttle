@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadConfig } from "../../config/loader.js";
-import { logger, initLogger } from "../../utils/logger.js";
+import { logger } from "../../utils/logger.js";
+import { resolveCommonOptions } from "../options.js";
 
 export function lsCommand(): Command {
   const cmd = new Command("ls");
@@ -8,19 +9,19 @@ export function lsCommand(): Command {
   cmd
     .description("List all configured jobs")
     .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
-    .action((options) => {
-      const globalOpts = cmd.parent?.opts() || {};
-      initLogger({
-        verbose: globalOpts.verbose,
-        quiet: globalOpts.quiet,
-      });
+    .action(() => {
+      const { configPath } = resolveCommonOptions(cmd);
 
       try {
-        const resolvedConfig = loadConfig(options.config);
+        const resolvedConfig = loadConfig(configPath);
 
         logger.info(`Configuration: ${resolvedConfig.config.shuttle.name}`);
-        logger.info(`Source: ${resolvedConfig.sourceDbConfig.host}:${resolvedConfig.sourceDbConfig.port}/${resolvedConfig.sourceDbConfig.database}`);
-        logger.info(`Target: ${resolvedConfig.targetSshConfig.user}@${resolvedConfig.targetSshConfig.host}:${resolvedConfig.targetSshConfig.port}`);
+        logger.info(
+          `Source: ${resolvedConfig.sourceDbConfig.host}:${resolvedConfig.sourceDbConfig.port}/${resolvedConfig.sourceDbConfig.database}`
+        );
+        logger.info(
+          `Target: ${resolvedConfig.targetSshConfig.user}@${resolvedConfig.targetSshConfig.host}:${resolvedConfig.targetSshConfig.port}`
+        );
         logger.info("");
 
         if (resolvedConfig.config.shuttle.jobs.length === 0) {
@@ -52,4 +53,3 @@ export function lsCommand(): Command {
 
   return cmd;
 }
-

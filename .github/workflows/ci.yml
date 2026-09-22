@@ -1,0 +1,227 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Une PR qui reçoit un nouveau push annule le run précédent.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Vérifier le formatage
+        run: npx prettier --check "src/**/*.ts"
+      - name: Build (typecheck strict)
+        run: npm run build
+
+  test:
+    name: Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Suite de tests (CLI, email, sécurité SSH, scheduler)
+        run: npm test
+
+  e2e:
+    name: E2E (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [14, 15, 16, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: testdb
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U testuser -d testdb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SHUTTLE_TEST_PG_EXTERNAL: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: testdb
+      PGUSER: testuser
+      PGPASSWORD: testpw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # pg_dump doit être au moins aussi récent que le serveur, sinon il refuse
+      # de tourner ("server version mismatch").
+      - name: Installer le client PostgreSQL ${{ matrix.postgres }}
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-${{ matrix.postgres }}
+          echo "/usr/lib/postgresql/${{ matrix.postgres }}/bin" >> "$GITHUB_PATH"
+      - name: Vérifier les versions client/serveur
+        run: |
+          pg_dump --version
+          psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tAc "SHOW server_version"
+      - run: npm ci
+      - name: Suite complète (dump, transfert vérifié, rétention, restauration)
+        run: npm run test:full
+
+  memory:
+    name: Mémoire bornée sur gros dump
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpw
+          POSTGRES_DB: testdb
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U testuser -d testdb"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: testdb
+      PGUSER: testuser
+      PGPASSWORD: testpw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installer le client PostgreSQL 16
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+      - run: npm ci
+      - run: npm run build
+      - name: Charger ~200 Mo de données
+        run: |
+          psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -q -v ON_ERROR_STOP=1 -c "
+            CREATE TABLE big (id serial primary key, payload text);
+            INSERT INTO big (payload)
+              SELECT repeat(md5(g::text), 40) FROM generate_series(1, 150000) g;"
+      - name: La compression doit rester à mémoire bornée
+        run: node tests/memory.test.mjs
+
+  docker:
+    name: Image Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build de l'image de production
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.production
+          push: false
+          load: true
+          tags: shuttle:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test de l'image
+        run: bash tests/docker-smoke.sh shuttle:ci
+
+  package:
+    name: Contenu du paquet npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: npm pack et vérification du contenu
+        run: |
+          npm pack --silent > /dev/null
+          TARBALL=$(ls ./*.tgz)
+          echo "Contenu de $TARBALL :"
+          tar -tzf "$TARBALL"
+          # Le binaire doit être présent...
+          tar -tzf "$TARBALL" | grep -q 'package/dist/index.js'
+          # ...et aucun secret ni source de test ne doit fuiter.
+          if tar -tzf "$TARBALL" | grep -qE 'package/(tests|src|\.env|.*\.pem|.*ssh_key)'; then
+            echo "Le paquet contient des fichiers qui ne devraient pas être publiés"
+            exit 1
+          fi
+      - name: Le binaire installé démarre
+        run: |
+          npm install -g ./*.tgz
+          shuttle --version
+          shuttle --help
+
+  audit:
+    name: Audit des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Vulnérabilités haute sévérité
+        run: npm audit --audit-level=high
+
+  ci-ok:
+    name: CI
+    if: always()
+    needs: [quality, test, e2e, memory, docker, package, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Échouer si un job requis a échoué
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if echo '${{ toJSON(needs) }}' | grep -q '"result": *"failure"\|"result": *"cancelled"'; then
+            exit 1
+          fi
+          echo "Tous les jobs sont passés."

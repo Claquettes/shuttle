@@ -27,6 +27,7 @@ pnpm-debug.log*
 # Backup files
 *.dump
 *.sql
+!tests/seed.sql
 *.gz
 *.apobak
 backups/

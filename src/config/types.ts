@@ -9,4 +9,3 @@ export interface ResolvedConfig {
   sourceDbConfig: DatabaseConfig;
   targetSshConfig: SSHConfig;
 }
-

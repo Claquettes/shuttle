@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadConfig, validateConfig } from "../../config/loader.js";
-import { logger, initLogger } from "../../utils/logger.js";
+import { logger } from "../../utils/logger.js";
+import { resolveCommonOptions } from "../options.js";
 
 export function validateCommand(): Command {
   const cmd = new Command("validate");
@@ -8,16 +9,12 @@ export function validateCommand(): Command {
   cmd
     .description("Validate Shuttle configuration and environment variables")
     .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
-    .action((options) => {
-      const globalOpts = cmd.parent?.opts() || {};
-      initLogger({
-        verbose: globalOpts.verbose,
-        quiet: globalOpts.quiet,
-      });
+    .action(() => {
+      const { configPath } = resolveCommonOptions(cmd);
 
       try {
-        logger.info(`Loading configuration from: ${options.config}`);
-        const resolvedConfig = loadConfig(options.config);
+        logger.info(`Loading configuration from: ${configPath}`);
+        const resolvedConfig = loadConfig(configPath);
 
         logger.info("");
         logger.info("=== Configuration Summary ===");
@@ -39,6 +36,32 @@ export function validateCommand(): Command {
         logger.info(`User: ${resolvedConfig.targetSshConfig.user}`);
         logger.info(`Key Path: ${resolvedConfig.targetSshConfig.keyPath}`);
         logger.info(`Base Path: ${resolvedConfig.targetSshConfig.basePath}`);
+
+        const ssh = resolvedConfig.targetSshConfig;
+        if (ssh.knownHostsPath) {
+          logger.info(`Host key: verified via known_hosts (${ssh.knownHostsPath})`);
+        } else if (ssh.hostFingerprints?.length) {
+          logger.info(
+            `Host key: verified via fingerprint (${ssh.hostFingerprints.length} accepted)`
+          );
+        } else {
+          logger.warn(
+            "Host key: NOT VERIFIED — Shuttle will accept any host key. " +
+              "Set 'known_hosts' or 'host_fingerprint' on the target to prevent interception."
+          );
+        }
+
+        const emailConfig = resolvedConfig.config.shuttle.notifications?.email;
+        logger.info("");
+        logger.info("=== Notifications ===");
+        if (emailConfig) {
+          logger.info(`Email: ${emailConfig.provider}`);
+          logger.info(`From: ${emailConfig.from}`);
+          logger.info(`To: ${emailConfig.to.join(", ")}`);
+          logger.info(`Trigger: ${emailConfig.on}`);
+        } else {
+          logger.info("Email: disabled");
+        }
 
         logger.info("");
         logger.info("=== Jobs ===");
@@ -78,4 +101,3 @@ export function validateCommand(): Command {
 
   return cmd;
 }
-

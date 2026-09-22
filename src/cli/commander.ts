@@ -1,16 +1,18 @@
 import { Command } from "commander";
+import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
 import { validateCommand } from "./commands/validate.js";
 import { runCommand } from "./commands/run.js";
 import { daemonCommand } from "./commands/daemon.js";
 import { lsCommand } from "./commands/ls.js";
 
+// Evite que la version de la CLI derive de celle du package.json
+const require = createRequire(import.meta.url);
+const { version } = require("../../package.json") as { version: string };
+
 const program = new Command();
 
-program
-  .name("shuttle")
-  .description("PostgreSQL backup tool with SSH transfer")
-  .version("1.0.0");
+program.name("shuttle").description("PostgreSQL backup tool with SSH transfer").version(version);
 
 program
   .option("-c, --config <path>", "Path to config file (.yml, .yaml, .json, .apo)", "shuttle.yml")
@@ -24,4 +26,3 @@ program.addCommand(daemonCommand());
 program.addCommand(lsCommand());
 
 export default program;
-

@@ -40,4 +40,3 @@ export function parseDatabaseUrl(url: string): DatabaseConfig {
     throw new Error("Failed to parse database URL");
   }
 }
-

@@ -40,7 +40,26 @@ shuttle:
     user: backup
     key_path: ./ssh_key
     base_path: /backups/my_app
+    # Verification de la cle d'hote (fortement recommande).
+    # Generer le fichier avec :
+    #   ssh-keyscan -p 22 backup.example.com > known_hosts
+    # Sans cela, Shuttle accepte n'importe quelle cle d'hote : un attaquant
+    # capable d'intercepter la connexion recevrait le dump de production.
+    # known_hosts: ./known_hosts
+    # strict_host_key: true
   
+  # Notifications : rapport email apres chaque sauvegarde (optionnel)
+  # notifications:
+  #   email:
+  #     provider: sendgrid   # sendgrid | resend
+  #     api_key: \${SENDGRID_API_KEY}
+  #     from: shuttle@example.com
+  #     from_name: Shuttle
+  #     to:
+  #       - ops@example.com
+  #     on: always            # always | success | failure
+  #     subject_prefix: "[Shuttle]"
+
   # Jobs de backup
   jobs:
     - name: full-nightly
@@ -78,4 +97,3 @@ shuttle:
 
   return cmd;
 }
-

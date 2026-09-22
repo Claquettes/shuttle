@@ -42,7 +42,13 @@ export function loadConfig(configPath: string): ResolvedConfig {
 
   const parseResult = ShuttleConfigSchema.safeParse(rawConfig);
   if (!parseResult.success) {
-    const errors = parseResult.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("\n");
+    // zod 4 : les problèmes de validation sont exposés via `issues`.
+    const errors = parseResult.error.issues
+      .map((issue) => {
+        const path = issue.path.map(String).join(".");
+        return path ? `${path}: ${issue.message}` : issue.message;
+      })
+      .join("\n");
     throw new Error(`Invalid configuration:\n${errors}`);
   }
 
@@ -81,19 +87,30 @@ function parseConfigFile(content: string, filePath: string): unknown {
       throw new Error("Failed to parse .apo file. Please use .yml or .yaml for YAML format.");
     }
   }
-  throw new Error(`Unsupported config file format: ${filePath}. Supported: .yml, .yaml, .json, .apo`);
+  throw new Error(
+    `Unsupported config file format: ${filePath}. Supported: .yml, .yaml, .json, .apo`
+  );
 }
 
 /**
  * Parse la configuration source (URL ou détails séparés)
  */
-function parseSourceConfig(source: { url?: string; host?: string; port?: number; database?: string; user?: string; password?: string }): DatabaseConfig {
+function parseSourceConfig(source: {
+  url?: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
+  password?: string;
+}): DatabaseConfig {
   if (source.url) {
     return parseDatabaseUrl(source.url);
   }
 
   if (!source.host || !source.database || !source.user || source.password === undefined) {
-    throw new Error("Source configuration must have either 'url' or all of: host, database, user, password");
+    throw new Error(
+      "Source configuration must have either 'url' or all of: host, database, user, password"
+    );
   }
 
   const port = source.port || 5432;
@@ -113,15 +130,33 @@ function parseSourceConfig(source: { url?: string; host?: string; port?: number;
 /**
  * Parse la configuration target (SSH)
  */
-function parseTargetConfig(target: { host: string; port?: number; user: string; key_path: string; key_passphrase?: string; base_path: string }, configDir: string): SSHConfig {
-  const keyPath = target.key_path.startsWith("/")
-    ? target.key_path
-    : resolve(configDir, target.key_path);
+function parseTargetConfig(
+  target: {
+    host: string;
+    port?: number;
+    user: string;
+    key_path: string;
+    key_passphrase?: string;
+    base_path: string;
+    known_hosts?: string;
+    host_fingerprint?: string | string[];
+    strict_host_key?: boolean;
+  },
+  configDir: string
+): SSHConfig {
+  const keyPath = resolveFromConfigDir(target.key_path, configDir);
 
   const port = target.port || 22;
   if (port < 1 || port > 65535) {
     throw new Error(`Invalid SSH port: ${port}`);
   }
+
+  const hostFingerprints = target.host_fingerprint
+    ? (Array.isArray(target.host_fingerprint)
+        ? target.host_fingerprint
+        : [target.host_fingerprint]
+      ).map((f) => f.trim())
+    : undefined;
 
   return {
     host: target.host,
@@ -130,7 +165,20 @@ function parseTargetConfig(target: { host: string; port?: number; user: string; 
     keyPath,
     keyPassphrase: target.key_passphrase,
     basePath: target.base_path,
+    knownHostsPath: target.known_hosts
+      ? resolveFromConfigDir(target.known_hosts, configDir)
+      : undefined,
+    hostFingerprints,
+    strictHostKey: target.strict_host_key ?? false,
   };
+}
+
+/**
+ * Les chemins relatifs de la config sont resolus par rapport au repertoire
+ * du fichier de configuration, pas au cwd du process.
+ */
+function resolveFromConfigDir(path: string, configDir: string): string {
+  return path.startsWith("/") ? path : resolve(configDir, path);
 }
 
 /**
@@ -164,9 +212,21 @@ export function validateConfig(resolvedConfig: ResolvedConfig): {
   errors: string[];
 } {
   const errors: string[] = [];
+  const ssh = resolvedConfig.targetSshConfig;
 
-  if (!existsSync(resolvedConfig.targetSshConfig.keyPath)) {
-    errors.push(`SSH key not found: ${resolvedConfig.targetSshConfig.keyPath}`);
+  if (!existsSync(ssh.keyPath)) {
+    errors.push(`SSH key not found: ${ssh.keyPath}`);
+  }
+
+  if (ssh.knownHostsPath && !existsSync(ssh.knownHostsPath)) {
+    errors.push(`known_hosts file not found: ${ssh.knownHostsPath}`);
+  }
+
+  const hasHostVerification = Boolean(ssh.knownHostsPath || ssh.hostFingerprints?.length);
+  if (!hasHostVerification && ssh.strictHostKey) {
+    errors.push(
+      "strict_host_key is enabled but neither 'known_hosts' nor 'host_fingerprint' is configured"
+    );
   }
 
   return {
@@ -174,4 +234,3 @@ export function validateConfig(resolvedConfig: ResolvedConfig): {
     errors,
   };
 }
-
