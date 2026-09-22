@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 
 # Client PostgreSQL depuis le dépôt officiel PGDG.
 # Le paquet de Debian bookworm est figé en 15, or pg_dump REFUSE de dumper un
