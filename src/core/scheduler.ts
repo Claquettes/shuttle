@@ -16,9 +16,6 @@ export interface JobCompletion {
   error?: string;
 }
 
-/**
- * Ensemble des jobs planifiés, avec suivi des exécutions en cours.
- */
 export class Scheduler {
   private readonly scheduled: ScheduledJob[] = [];
   private readonly running = new Map<string, Promise<void>>();
@@ -80,10 +77,7 @@ export class Scheduler {
     this.running.set(job.name, execution);
   }
 
-  /**
-   * Désarme les crons puis attend la fin des exécutions en cours.
-   * Interrompre un transfert en vol laisserait une sauvegarde incomplète.
-   */
+  /** Interrompre un transfert en vol laisserait une sauvegarde incomplète. */
   async shutdown(timeoutMs: number): Promise<boolean> {
     this.stopping = true;
 
@@ -124,9 +118,6 @@ export class Scheduler {
   }
 }
 
-/**
- * Planifie tous les jobs d'une configuration selon leurs expressions cron
- */
 export function scheduleJobs(
   resolvedConfig: ResolvedConfig,
   onJobComplete?: (result: JobCompletion) => void

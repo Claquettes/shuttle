@@ -27,11 +27,9 @@ interface RemoteBackup {
 }
 
 /**
- * Applique la rétention (keepLast) pour un job, en local et à distance.
- *
- * La rétention est volontairement défensive : toute anomalie (listing
- * impossible, horodatage illisible, fichier protégé) fait renoncer à la
- * suppression plutôt que de risquer de détruire une sauvegarde valide.
+ * Volontairement défensive : toute anomalie (listing impossible, horodatage
+ * illisible, fichier protégé) fait renoncer à la suppression plutôt que de
+ * risquer de détruire une sauvegarde valide.
  */
 export async function applyRetention(
   job: Job,
@@ -61,9 +59,6 @@ export async function applyRetention(
   return result;
 }
 
-/**
- * Applique la rétention locale
- */
 function applyLocalRetention(job: Job, protectPath?: string): number {
   const backupDir = getLocalBackupDir();
 
@@ -102,11 +97,9 @@ function applyLocalRetention(job: Job, protectPath?: string): number {
 }
 
 /**
- * Applique la rétention distante.
- *
  * Les sauvegardes sont rangées dans `<remoteJobDir>/<YYYY-MM-DD>/<fichier>` :
- * il faut donc descendre dans les sous-répertoires de date, et non lister
- * seulement `remoteJobDir`.
+ * il faut descendre dans les sous-répertoires de date, et non lister seulement
+ * `remoteJobDir`.
  */
 async function applyRemoteRetention(
   job: Job,

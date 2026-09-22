@@ -1,7 +1,3 @@
-/**
- * Helpers de formatage partagés (affichage logs / rapports)
- */
-
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const k = 1024;

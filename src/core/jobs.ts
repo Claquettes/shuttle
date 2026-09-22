@@ -22,9 +22,6 @@ export interface JobExecutionResult {
   };
 }
 
-/**
- * Exécute un job complet : dump, transfert, rétention, puis rapport email
- */
 export async function executeJob(
   job: Job,
   resolvedConfig: ResolvedConfig
@@ -117,10 +114,7 @@ export async function executeJob(
   }
 }
 
-/**
- * Construit et envoie le rapport email si les notifications sont configurées.
- * Toute erreur d'envoi est absorbée : elle ne doit pas changer l'issue du job.
- */
+/** Toute erreur d'envoi est absorbée : elle ne doit pas changer l'issue du job. */
 async function notify(
   resolvedConfig: ResolvedConfig,
   params: {
@@ -172,9 +166,6 @@ async function notify(
   }
 }
 
-/**
- * Exécute tous les jobs d'une configuration
- */
 export async function executeAllJobs(
   resolvedConfig: ResolvedConfig
 ): Promise<JobExecutionResult[]> {

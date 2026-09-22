@@ -6,12 +6,9 @@ import { ShuttleConfigSchema } from "./schema.js";
 import { logger } from "../utils/logger.js";
 import { parseDatabaseUrl } from "../utils/database.js";
 import type { ResolvedConfig } from "./types.js";
-import type { DatabaseConfig, SSHConfig } from "../utils/env.js";
+import type { DatabaseConfig, SSHConfig } from "./types.js";
 
-/**
- * Charge et valide la configuration depuis un fichier .yml ou .yaml
- * Charge également le .env du même répertoire
- */
+/** Charge aussi le .env situé à côté du fichier de configuration. */
 export function loadConfig(configPath: string): ResolvedConfig {
   const resolvedPath = resolve(configPath);
   const configDir = dirname(resolvedPath);
@@ -64,9 +61,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
   };
 }
 
-/**
- * Parse un fichier de configuration (YAML ou JSON)
- */
 function parseConfigFile(content: string, filePath: string): unknown {
   const ext = filePath.toLowerCase();
   if (ext.endsWith(".json")) {
@@ -92,9 +86,6 @@ function parseConfigFile(content: string, filePath: string): unknown {
   );
 }
 
-/**
- * Parse la configuration source (URL ou détails séparés)
- */
 function parseSourceConfig(source: {
   url?: string;
   host?: string;
@@ -127,9 +118,6 @@ function parseSourceConfig(source: {
   };
 }
 
-/**
- * Parse la configuration target (SSH)
- */
 function parseTargetConfig(
   target: {
     host: string;
@@ -174,17 +162,14 @@ function parseTargetConfig(
 }
 
 /**
- * Les chemins relatifs de la config sont resolus par rapport au repertoire
- * du fichier de configuration, pas au cwd du process.
+ * Les chemins relatifs de la config sont résolus par rapport au répertoire du
+ * fichier de configuration, pas au cwd du process.
  */
 function resolveFromConfigDir(path: string, configDir: string): string {
   return path.startsWith("/") ? path : resolve(configDir, path);
 }
 
-/**
- * Expansion des variables d'environnement dans le contenu YAML
- * Supporte ${VAR} et ${VAR:-default}
- */
+/** Supporte ${VAR} et ${VAR:-defaut}. */
 function expandEnvVars(content: string): string {
   return content.replace(/\$\{([^}]+)\}/g, (match, expr) => {
     const parts = expr.split(":-");
@@ -204,9 +189,6 @@ function expandEnvVars(content: string): string {
   });
 }
 
-/**
- * Valide que la configuration est complète
- */
 export function validateConfig(resolvedConfig: ResolvedConfig): {
   valid: boolean;
   errors: string[];

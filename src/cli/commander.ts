@@ -6,7 +6,7 @@ import { runCommand } from "./commands/run.js";
 import { daemonCommand } from "./commands/daemon.js";
 import { lsCommand } from "./commands/ls.js";
 
-// Evite que la version de la CLI derive de celle du package.json
+// Évite que la version de la CLI dérive de celle du package.json
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json") as { version: string };
 

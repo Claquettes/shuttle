@@ -10,7 +10,7 @@ import {
 import { pipeline } from "stream/promises";
 import { createGzip } from "zlib";
 import { join } from "path";
-import type { DatabaseConfig } from "../utils/env.js";
+import type { DatabaseConfig } from "../config/types.js";
 import type { Job } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
 import { formatBytes } from "../utils/format.js";
@@ -33,9 +33,6 @@ const KILL_GRACE_MS = 10000;
 /** Permissions d'un dump : lecture/écriture par le propriétaire uniquement */
 const DUMP_MODE = 0o600;
 
-/**
- * Exécute pg_dump et génère un fichier de dump
- */
 export async function runPgDump(options: PgDumpOptions): Promise<PgDumpResult> {
   const { dbConfig, job, timeout = DEFAULT_TIMEOUT } = options;
   const outputDir = getLocalBackupDir();

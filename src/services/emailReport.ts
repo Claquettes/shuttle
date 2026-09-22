@@ -61,9 +61,6 @@ function formatSender(email: string, name?: string): string {
   return `${display} <${email}>`;
 }
 
-/**
- * Données d'un rapport de sauvegarde envoyé par email
- */
 export interface BackupReport {
   /** Nom de l'instance Shuttle (config.shuttle.name) */
   shuttleName: string;
@@ -117,9 +114,6 @@ export function getRunnerHostname(): string {
   }
 }
 
-/**
- * Décide si un rapport doit être envoyé selon la config `on`
- */
 export function shouldNotify(config: EmailNotificationConfig, success: boolean): boolean {
   if (config.on === "always") return true;
   if (config.on === "success") return success;
@@ -127,10 +121,8 @@ export function shouldNotify(config: EmailNotificationConfig, success: boolean):
 }
 
 /**
- * Envoie le rapport de sauvegarde par email via l'API du provider configuré.
- *
- * Ne lève jamais d'exception : une notification qui échoue ne doit pas
- * faire échouer une sauvegarde qui, elle, a réussi.
+ * Ne lève jamais d'exception : une notification qui échoue ne doit pas faire
+ * échouer une sauvegarde qui, elle, a réussi.
  */
 export async function sendBackupReport(
   config: EmailNotificationConfig,

@@ -4,7 +4,7 @@ import { scheduleJobs, type Scheduler } from "../../core/scheduler.js";
 import { logger } from "../../utils/logger.js";
 import { resolveCommonOptions } from "../options.js";
 
-/** Delai laisse aux sauvegardes en cours pour se terminer a l'arret */
+/** Délai laissé aux sauvegardes en cours pour se terminer à l'arrêt */
 const SHUTDOWN_TIMEOUT_MS = 15 * 60 * 1000;
 
 export function daemonCommand(): Command {
@@ -20,9 +20,9 @@ export function daemonCommand(): Command {
       let shuttingDown = false;
 
       /**
-       * Arret gracieux : on desarme les crons puis on laisse les sauvegardes en
-       * cours se terminer. Couper un dump ou un transfert en vol laisserait une
-       * sauvegarde incomplete cote serveur de backup.
+       * Couper un dump ou un transfert en vol laisserait une sauvegarde
+       * incomplète côté serveur de backup : on désarme les crons, puis on
+       * laisse les exécutions en cours se terminer.
        */
       const shutdown = async (signal: string) => {
         if (shuttingDown) {

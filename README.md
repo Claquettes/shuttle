@@ -638,7 +638,7 @@ shuttle/
 │   ├── config/
 │   │   ├── schema.ts         # Zod schema for config
 │   │   ├── loader.ts         # Load .yml + .env
-│   │   └── types.ts          # TypeScript types
+│   │   └── types.ts          # Resolved config and connection types
 │   ├── core/
 │   │   ├── jobs.ts           # Job execution
 │   │   └── scheduler.ts      # Scheduling with node-cron
@@ -650,7 +650,6 @@ shuttle/
 │   │   └── emailReport.ts    # Backup reports (SendGrid / Resend)
 │   └── utils/
 │       ├── logger.ts         # Logging with pino
-│       ├── env.ts            # Environment helpers
 │       ├── database.ts       # Database URL parser
 │       ├── format.ts         # Byte/duration formatting
 │       └── paths.ts          # Path management
