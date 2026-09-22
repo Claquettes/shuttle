@@ -39,11 +39,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/claquettes/shuttle.git"
+    "url": "git+https://github.com/Claquettes/shuttle.git"
   },
-  "homepage": "https://github.com/claquettes/shuttle#readme",
+  "homepage": "https://github.com/Claquettes/shuttle#readme",
   "bugs": {
-    "url": "https://github.com/claquettes/shuttle/issues"
+    "url": "https://github.com/Claquettes/shuttle/issues"
   },
   "dependencies": {
     "commander": "^15.0.0",

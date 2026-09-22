@@ -8,7 +8,7 @@
 
 - **npm package**: [`@claquettes/shuttle`](https://www.npmjs.com/package/@claquettes/shuttle)
 - **Docker image**: [`claquettes/shuttle`](https://hub.docker.com/r/claquettes/shuttle)
-- **GitHub**: [claquettes/shuttle](https://github.com/claquettes/shuttle)
+- **GitHub**: [Claquettes/shuttle](https://github.com/Claquettes/shuttle)
 
 ## Features
 
@@ -100,7 +100,7 @@ Or in docker-compose (build from source):
 services:
   shuttle:
     build:
-      context: https://github.com/claquettes/shuttle.git
+      context: https://github.com/Claquettes/shuttle.git
       dockerfile: Dockerfile.production
 ```
 
