@@ -69,10 +69,12 @@ export const TargetConfigSchema = z.object({
 
 /**
  * Notification par email (rapport envoyé après chaque sauvegarde)
- * Provider supporté : SendGrid (API v3)
+ * Providers supportés : SendGrid (API v3) et Resend (API v1)
  */
+export const EmailProviderSchema = z.enum(["sendgrid", "resend"]);
+
 export const EmailNotificationSchema = z.object({
-  provider: z.literal("sendgrid").default("sendgrid"),
+  provider: EmailProviderSchema.default("sendgrid"),
   api_key: z.string().min(1),
   from: z.string().email(),
   from_name: z.string().optional(),
@@ -80,7 +82,7 @@ export const EmailNotificationSchema = z.object({
   /** always = succès + échec, success = succès seulement, failure = échec seulement */
   on: z.enum(["always", "success", "failure"]).default("always"),
   subject_prefix: z.string().optional(),
-  /** Timeout de l'appel HTTP vers l'API SendGrid, en millisecondes */
+  /** Timeout de l'appel HTTP vers l'API du provider, en millisecondes */
   timeout: z.number().int().positive().default(15000),
 });
 
@@ -103,6 +105,7 @@ export const ShuttleConfigSchema = z.object({
 export type Job = z.infer<typeof JobSchema>;
 export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 export type TargetConfig = z.infer<typeof TargetConfigSchema>;
+export type EmailProvider = z.infer<typeof EmailProviderSchema>;
 export type EmailNotificationConfig = z.infer<typeof EmailNotificationSchema>;
 export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 export type ShuttleConfig = z.infer<typeof ShuttleConfigSchema>;

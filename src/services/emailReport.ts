@@ -1,9 +1,65 @@
 import { hostname } from "os";
 import { logger } from "../utils/logger.js";
 import { formatBytes, formatDuration } from "../utils/format.js";
-import type { EmailNotificationConfig } from "../config/schema.js";
+import type { EmailNotificationConfig, EmailProvider } from "../config/schema.js";
 
-const SENDGRID_ENDPOINT = "https://api.sendgrid.com/v3/mail/send";
+/**
+ * Corps du message, indépendant du provider.
+ */
+interface EmailMessage {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+interface ProviderAdapter {
+  /** Nom affiché dans les logs */
+  label: string;
+  endpoint: string;
+  buildBody(config: EmailNotificationConfig, message: EmailMessage): unknown;
+}
+
+/**
+ * Les deux APIs s'authentifient de la même façon (`Authorization: Bearer`) et
+ * ne diffèrent que par l’URL et la forme du corps JSON.
+ */
+const PROVIDERS: Record<EmailProvider, ProviderAdapter> = {
+  sendgrid: {
+    label: "SendGrid",
+    endpoint: "https://api.sendgrid.com/v3/mail/send",
+    buildBody: (config, message) => ({
+      personalizations: [{ to: config.to.map((email) => ({ email })) }],
+      from: { email: config.from, ...(config.from_name ? { name: config.from_name } : {}) },
+      subject: message.subject,
+      content: [
+        { type: "text/plain", value: message.text },
+        { type: "text/html", value: message.html },
+      ],
+    }),
+  },
+  resend: {
+    label: "Resend",
+    endpoint: "https://api.resend.com/emails",
+    buildBody: (config, message) => ({
+      from: formatSender(config.from, config.from_name),
+      to: config.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    }),
+  },
+};
+
+/**
+ * Expéditeur au format RFC 5322 attendu par Resend : `Nom <adresse>`, ou
+ * l'adresse seule sans nom. Un nom contenant un caractère spécial doit être
+ * mis entre guillemets, sinon l'adresse entière est rejetée.
+ */
+function formatSender(email: string, name?: string): string {
+  if (!name) return email;
+  const display = /[(),.:;<>@[\\\]"]/.test(name) ? `"${name.replace(/(["\\])/g, "\\$1")}"` : name;
+  return `${display} <${email}>`;
+}
 
 /**
  * Données d'un rapport de sauvegarde envoyé par email
@@ -71,7 +127,7 @@ export function shouldNotify(config: EmailNotificationConfig, success: boolean):
 }
 
 /**
- * Envoie le rapport de sauvegarde par email via l'API SendGrid v3.
+ * Envoie le rapport de sauvegarde par email via l'API du provider configuré.
  *
  * Ne lève jamais d'exception : une notification qui échoue ne doit pas
  * faire échouer une sauvegarde qui, elle, a réussi.
@@ -85,33 +141,30 @@ export async function sendBackupReport(
     return false;
   }
 
-  const subject = buildSubject(config, report);
+  const provider = PROVIDERS[config.provider];
+  const message: EmailMessage = {
+    subject: buildSubject(config, report),
+    text: buildTextBody(report),
+    html: buildHtmlBody(report),
+  };
 
   try {
-    const response = await fetch(SENDGRID_ENDPOINT, {
+    const response = await fetch(provider.endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${config.api_key}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        personalizations: [{ to: config.to.map((email) => ({ email })) }],
-        from: { email: config.from, ...(config.from_name ? { name: config.from_name } : {}) },
-        subject,
-        content: [
-          { type: "text/plain", value: buildTextBody(report) },
-          { type: "text/html", value: buildHtmlBody(report) },
-        ],
-      }),
+      body: JSON.stringify(provider.buildBody(config, message)),
       signal: AbortSignal.timeout(config.timeout),
     });
 
     if (!response.ok) {
-      // Le corps d'erreur SendGrid ne contient pas la clé d'API, uniquement
-      // la description du problème (adresse invalide, quota, etc.)
+      // Le corps d'erreur des deux providers ne contient pas la clé d'API,
+      // uniquement la description du problème (adresse invalide, quota, etc.)
       const detail = await response.text().catch(() => "");
       logger.warn(
-        `[${report.jobName}] Email report not sent (SendGrid ${response.status}): ${truncate(detail, 500)}`
+        `[${report.jobName}] Email report not sent (${provider.label} ${response.status}): ${truncate(detail, 500)}`
       );
       return false;
     }

@@ -144,19 +144,27 @@ the production database. It logs a warning on every run until you do. See §6.
 
 ### 4.5 `notifications.email`
 
-Sends a report after **every** backup attempt. SendGrid v3 REST API over HTTPS;
-no extra dependency is installed.
+Sends a report after **every** backup attempt. SendGrid v3 or Resend REST API
+over HTTPS; no extra dependency is installed.
 
 | Field | Type | Required | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `provider` | `sendgrid` | no | `sendgrid` | Only value supported |
-| `api_key` | string | yes | — | Needs the `mail.send` permission. Use `${SENDGRID_API_KEY}` |
-| `from` | email | yes | — | Must be a **verified sender** in SendGrid, or sends fail with 403 |
-| `from_name` | string | no | — | |
+| `provider` | `sendgrid` \| `resend` | no | `sendgrid` | Any other value is rejected at validation |
+| `api_key` | string | yes | — | SendGrid: needs `mail.send`. Resend: `re_...` with send access. Use `${SENDGRID_API_KEY}` / `${RESEND_API_KEY}` |
+| `from` | email | yes | — | Must be a **verified sender** (SendGrid) or an address on a **verified domain** (Resend), or sends fail with 403 / 422 |
+| `from_name` | string | no | — | Resend sends it as `Name <address>`, quoted when the name contains a special character |
 | `to` | email[] | yes | — | At least one |
 | `on` | `always` \| `success` \| `failure` | no | `always` | |
 | `subject_prefix` | string | no | — | e.g. `"[Prod]"` — useful to tell environments apart |
-| `timeout` | integer (ms) | no | `15000` | HTTP timeout for the SendGrid call |
+| `timeout` | integer (ms) | no | `15000` | HTTP timeout for the provider call |
+
+Report contents, subject format and the `on` filter are identical for both
+providers: switching means changing `provider` and `api_key`, nothing else.
+
+| Provider | Endpoint | Auth |
+| --- | --- | --- |
+| `sendgrid` | `POST https://api.sendgrid.com/v3/mail/send` | `Authorization: Bearer <api_key>` |
+| `resend` | `POST https://api.resend.com/emails` | `Authorization: Bearer <api_key>` |
 
 Report contents: source database + `host:port` + user, the machine Shuttle ran
 on, destination `user@host:port`, filename, size, format, remote and local
@@ -472,6 +480,7 @@ psql -d restore_test -c "\dt"
 | `Previous run is still in progress, skipping` | Job slower than its cron interval | Lengthen the interval, split the job, or raise `timeout` |
 | Retention deleted more than expected | `keepLast` counts per job, local **and** remote | Raise `keepLast`; 1.x never pruned remotely so 2.0 catches up on first run |
 | Email never arrives, `SendGrid 403` in logs | `from` is not a verified sender | Verify the sender in SendGrid |
+| Email never arrives, `Resend 422` in logs | `from` is not on a domain verified in Resend | Verify the domain in Resend, or use `onboarding@resend.dev` for a quick test |
 | Local backups disappear on redeploy | `/backups` not on a persistent volume | Mount a named volume or PVC |
 | `permission denied` writing `/backups` | Volume not writable by UID 1001 | `chown -R 1001:1001` the host directory |
 

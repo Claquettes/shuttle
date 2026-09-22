@@ -51,7 +51,7 @@ shuttle:
   # Notifications : rapport email apres chaque sauvegarde (optionnel)
   # notifications:
   #   email:
-  #     provider: sendgrid
+  #     provider: sendgrid   # sendgrid | resend
   #     api_key: \${SENDGRID_API_KEY}
   #     from: shuttle@example.com
   #     from_name: Shuttle

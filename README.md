@@ -21,7 +21,7 @@
 - **Automatic retention**: Manages backup retention automatically (local + remote)
 - **Dump types**: Supports full dumps or specific tables
 - **Compression**: Optional dump compression
-- **Email reports**: Sends a report after every backup via SendGrid (source server + what was shipped)
+- **Email reports**: Sends a report after every backup via SendGrid or Resend (source server + what was shipped)
 - **Complete CLI**: Commands for init, validate, run, daemon, ls
 - **Up-to-date `pg_dump`**: the Docker image ships PostgreSQL client 18, so it can back up any server up to 18
 
@@ -117,7 +117,7 @@ Two things are new and worth adopting:
 
 - `target.known_hosts` / `target.host_fingerprint` — pin the backup server's SSH
   key. Without it Shuttle accepts any host key and logs a warning on every run.
-- `notifications.email` — get a report after every backup.
+- `notifications.email` — get a report after every backup, via SendGrid or Resend.
 
 Behaviour that changed without any config change on your side:
 
@@ -300,9 +300,10 @@ Shuttle is built so that a failure never silently destroys a good backup:
 ### 7. Email reports (optional)
 
 Shuttle can email a report **after every backup**, describing the origin server it
-dumped and exactly what it shipped. Reports are sent through the
-[SendGrid v3 API](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send)
-over plain HTTPS — no extra dependency is installed.
+dumped and exactly what it shipped. Two providers are supported —
+[SendGrid v3](https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send)
+and [Resend](https://resend.com/docs/api-reference/emails/send-email) — both called
+over plain HTTPS, so no extra dependency is installed.
 
 ```yaml
 version: 1
@@ -318,9 +319,9 @@ shuttle:
 
   notifications:
     email:
-      provider: sendgrid
+      provider: sendgrid             # sendgrid | resend
       api_key: ${SENDGRID_API_KEY}   # keep this in .env, never in the YAML
-      from: shuttle@example.com      # must be a verified SendGrid sender
+      from: shuttle@example.com      # must be a verified sender / domain
       from_name: Shuttle             # optional
       to:
         - ops@example.com
@@ -337,13 +338,31 @@ shuttle:
 ```
 
 **Fields:**
-- `provider`: only `sendgrid` is supported today
-- `api_key`: SendGrid API key with the `mail.send` permission
-- `from` / `from_name`: sender, must be verified in your SendGrid account
+- `provider`: `sendgrid` (default) or `resend`
+- `api_key`: SendGrid API key with the `mail.send` permission, or a Resend API key
+  with send access (`re_...`)
+- `from` / `from_name`: sender. It must be a verified sender in your SendGrid
+  account, or an address on a verified domain in your Resend account — otherwise
+  the provider rejects the send (403 for SendGrid, 422 for Resend)
 - `to`: one or more recipients
 - `on`: `always` (default), `success` only, or `failure` only
 - `subject_prefix`: prepended to the subject, useful to tell environments apart
-- `timeout`: HTTP timeout for the SendGrid call, in milliseconds
+- `timeout`: HTTP timeout for the provider call, in milliseconds
+
+Switching provider only changes `provider` and `api_key` — the report contents,
+the subject format and the `on` filter are identical either way:
+
+```yaml
+  notifications:
+    email:
+      provider: resend
+      api_key: ${RESEND_API_KEY}
+      from: shuttle@example.com      # on a domain verified in Resend
+      from_name: Shuttle
+      to:
+        - ops@example.com
+      on: always
+```
 
 **What the report contains:**
 
@@ -365,7 +384,7 @@ Subject line format:
 **Notes:**
 - A failing notification never fails a backup: send errors are logged as warnings and the job keeps its own status.
 - The API key is never logged and never appears in the message body.
-- Keep the key out of the YAML by using `${SENDGRID_API_KEY}` with a `.env` file next to the config.
+- Keep the key out of the YAML by using `${SENDGRID_API_KEY}` / `${RESEND_API_KEY}` with a `.env` file next to the config.
 
 ## Usage
 
@@ -628,7 +647,7 @@ shuttle/
 │   │   ├── sshTransfer.ts    # SFTP transfer (atomic + verified)
 │   │   ├── hostKey.ts        # SSH host key verification
 │   │   ├── retention.ts      # Retention management
-│   │   └── emailReport.ts    # SendGrid backup reports
+│   │   └── emailReport.ts    # Backup reports (SendGrid / Resend)
 │   └── utils/
 │       ├── logger.ts         # Logging with pino
 │       ├── env.ts            # Environment helpers
@@ -640,7 +659,7 @@ shuttle/
 │   ├── sftpServer.mjs        # In-process SFTP server used by the tests
 │   ├── cli.test.mjs          # CLI behaviour and config validation
 │   ├── docs.test.mjs         # Validates every config example in the docs
-│   ├── email.test.mjs        # SendGrid report contents
+│   ├── email.test.mjs        # Report contents, both providers
 │   ├── safety.test.mjs       # Host keys, transfer integrity, retention
 │   ├── scheduler.test.mjs    # Overlap guard, graceful shutdown
 │   ├── memory.test.mjs       # Bounded-memory compression

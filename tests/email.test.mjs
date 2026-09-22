@@ -73,6 +73,40 @@ await check("HTML échappé (pas d'injection via le message d'erreur)", async ()
   assert.ok(html.includes("&lt;script&gt;") && !html.includes("<script>"));
 });
 
+await check("payload Resend conforme", async () => {
+  globalThis.fetch = okFetch;
+  const resendCfg = { ...cfg, provider: "resend", api_key: "re_super-secret-key" };
+  assert.strictEqual(await sendBackupReport(resendCfg, report), true);
+  assert.strictEqual(captured.url, "https://api.resend.com/emails");
+  assert.strictEqual(captured.init.headers.Authorization, "Bearer re_super-secret-key");
+  const b = JSON.parse(captured.init.body);
+  assert.strictEqual(b.from, "Shuttle <shuttle@x.com>");
+  assert.deepStrictEqual(b.to, ["ops@x.com", "cto@x.com"]);
+  assert.match(b.subject, /\[Prod\] \[OK\] prod-shuttle \/ full-nightly/);
+  assert.match(b.text, /Base       : prod_app/);
+  assert.ok(b.html.startsWith("<!doctype html>"));
+});
+
+await check("Resend : expéditeur sans from_name, et nom spécial entre guillemets", async () => {
+  globalThis.fetch = okFetch;
+  await sendBackupReport({ ...cfg, provider: "resend", from_name: undefined }, report);
+  assert.strictEqual(JSON.parse(captured.init.body).from, "shuttle@x.com");
+
+  await sendBackupReport({ ...cfg, provider: "resend", from_name: "Shuttle, Prod" }, report);
+  assert.strictEqual(JSON.parse(captured.init.body).from, '"Shuttle, Prod" <shuttle@x.com>');
+});
+
+await check("Resend : la clé d'API n'apparaît jamais dans le message", async () => {
+  globalThis.fetch = okFetch;
+  await sendBackupReport({ ...cfg, provider: "resend", api_key: "re_top-secret" }, report);
+  assert.ok(!captured.init.body.includes("re_top-secret"));
+});
+
+await check("Resend : une erreur HTTP ne fait pas échouer la sauvegarde", async () => {
+  globalThis.fetch = async () => ({ ok: false, status: 422, text: async () => "domain not verified" });
+  assert.strictEqual(await sendBackupReport({ ...cfg, provider: "resend" }, report), false);
+});
+
 await check("filtres `on`", async () => {
   assert.strictEqual(shouldNotify({ ...cfg, on: "success" }, false), false);
   assert.strictEqual(shouldNotify({ ...cfg, on: "success" }, true), true);

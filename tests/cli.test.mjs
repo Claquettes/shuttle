@@ -183,6 +183,33 @@ check("config email valide -> affichée sans la clé d'API", () => {
   assert.ok(!r.out.includes("SG.secret-value"), "la clé d'API est affichée !");
 });
 
+check("provider resend accepté et affiché", () => {
+  writeConfig("resend.yml", validConfig(`  notifications:
+    email:
+      provider: resend
+      api_key: re_secret-value
+      from: a@b.com
+      to:
+        - ops@b.com
+`));
+  const r = cli(["validate", "-c", "resend.yml"]);
+  assert.strictEqual(r.code, 0, r.out);
+  assert.match(r.out, /Email: resend/);
+  assert.ok(!r.out.includes("re_secret-value"), "la clé d'API est affichée !");
+});
+
+check("provider inconnu -> code 1", () => {
+  writeConfig("badprovider.yml", validConfig(`  notifications:
+    email:
+      provider: mailgun
+      api_key: k
+      from: a@b.com
+      to:
+        - ops@b.com
+`));
+  assert.strictEqual(cli(["validate", "-c", "badprovider.yml"]).code, 1);
+});
+
 check("email invalide -> code 1", () => {
   writeConfig("badmail.yml", validConfig(`  notifications:
     email:
