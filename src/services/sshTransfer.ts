@@ -2,7 +2,7 @@ import SftpClient from "ssh2-sftp-client";
 import type { FileInfo } from "ssh2-sftp-client";
 import { readFileSync, existsSync, statSync } from "fs";
 import { basename, join } from "path";
-import type { SSHConfig } from "../utils/env.js";
+import type { SSHConfig } from "../config/types.js";
 import { logger } from "../utils/logger.js";
 import { formatBytes } from "../utils/format.js";
 import { buildHostVerifier } from "./hostKey.js";
@@ -67,12 +67,9 @@ export class SftpSession {
   }
 
   /**
-   * Envoie un fichier de façon atomique et vérifiée.
-   *
-   * 1. écriture sous un nom temporaire `.part` : un transfert interrompu ne
-   *    laisse jamais un fichier tronqué portant le nom d'une sauvegarde valide ;
-   * 2. comparaison de la taille distante avec la taille locale ;
-   * 3. renommage vers le nom définitif seulement si les tailles concordent.
+   * Le passage par un `.part` renommé après vérification garantit qu'un
+   * transfert interrompu ne laisse jamais un fichier tronqué portant le nom
+   * d'une sauvegarde valide.
    */
   async upload(localPath: string, remoteDir: string): Promise<TransferResult> {
     const client = this.require();
@@ -138,9 +135,7 @@ export class SftpSession {
     }
   }
 
-  /**
-   * Liste les entrées d'un répertoire distant. Retourne [] si absent.
-   */
+  /** Retourne [] si le répertoire n'existe pas. */
   async list(remoteDir: string): Promise<FileInfo[]> {
     try {
       return await this.require().list(remoteDir);
@@ -169,9 +164,6 @@ export class SftpSession {
   }
 }
 
-/**
- * Ouvre une session SFTP, exécute `fn`, puis ferme la connexion dans tous les cas.
- */
 export async function withSftp<T>(
   sshConfig: SSHConfig,
   fn: (session: SftpSession) => Promise<T>
@@ -182,23 +174,6 @@ export async function withSftp<T>(
     return await fn(session);
   } finally {
     await session.close();
-  }
-}
-
-/**
- * Transfère un fichier vers un serveur distant via SFTP (connexion dédiée).
- */
-export async function transferFile(
-  localPath: string,
-  remoteDir: string,
-  sshConfig: SSHConfig
-): Promise<TransferResult> {
-  try {
-    return await withSftp(sshConfig, (session) => session.upload(localPath, remoteDir));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error(`[SSH] Transfer failed: ${message}`);
-    throw new Error(`SSH transfer failed: ${message}`);
   }
 }
 

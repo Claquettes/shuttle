@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { readFileSync } from "fs";
 import { logger } from "../utils/logger.js";
-import type { SSHConfig } from "../utils/env.js";
+import type { SSHConfig } from "../config/types.js";
 
 /**
  * Vérification de la clé d'hôte SSH.

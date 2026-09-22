@@ -1,9 +1,6 @@
-import type { DatabaseConfig } from "./env.js";
+import type { DatabaseConfig } from "../config/types.js";
 
-/**
- * Parse une URL PostgreSQL en configuration de base de données
- * Format: postgresql://user:password@host:port/database
- */
+/** Format attendu : postgresql://user:password@host:port/database */
 export function parseDatabaseUrl(url: string): DatabaseConfig {
   try {
     const normalizedUrl = url.startsWith("postgres://")

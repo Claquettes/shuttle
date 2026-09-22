@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-/**
- * Schéma Zod pour la validation du fichier de configuration (YAML/JSON)
- */
-
 export const JobSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["full", "tables"]),
@@ -15,10 +11,6 @@ export const JobSchema = z.object({
   timeout: z.number().int().positive().optional(),
 });
 
-/**
- * Configuration de la source (base de données PostgreSQL)
- * Supporte soit une URL, soit des détails séparés
- */
 export const SourceConfigSchema = z.union(
   [
     z.object({
@@ -45,9 +37,6 @@ export const SourceConfigSchema = z.union(
   }
 );
 
-/**
- * Configuration de la cible (serveur de backup SSH/SFTP)
- */
 export const TargetConfigSchema = z.object({
   host: z.string().min(1),
   port: z.number().int().positive().max(65535).default(22),
@@ -67,10 +56,7 @@ export const TargetConfigSchema = z.object({
   strict_host_key: z.boolean().default(false),
 });
 
-/**
- * Notification par email (rapport envoyé après chaque sauvegarde)
- * Providers supportés : SendGrid (API v3) et Resend (API v1)
- */
+/** Providers supportés : SendGrid (API v3) et Resend (API v1). */
 export const EmailProviderSchema = z.enum(["sendgrid", "resend"]);
 
 export const EmailNotificationSchema = z.object({

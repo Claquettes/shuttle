@@ -1,30 +1,16 @@
-import { dirname, resolve } from "path";
+import { resolve } from "path";
 import { existsSync, mkdirSync } from "fs";
 
 export function resolvePath(relativePath: string): string {
   return resolve(process.cwd(), relativePath);
 }
 
-/**
- * Trouve le répertoire contenant le fichier de configuration
- */
-export function findConfigDir(configPath: string): string {
-  const resolved = resolvePath(configPath);
-  return dirname(resolved);
-}
-
-/**
- * Crée un répertoire s'il n'existe pas
- */
 export function ensureDir(dirPath: string, mode?: number): void {
   if (!existsSync(dirPath)) {
     mkdirSync(dirPath, { recursive: true, mode });
   }
 }
 
-/**
- * Génère un nom de fichier de dump basé sur le job et la date
- */
 export function generateDumpFilename(
   jobName: string,
   format: "plain" | "custom",
